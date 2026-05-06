@@ -342,6 +342,44 @@ textarea {
   gap: 14px;
 }
 
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.meal-manage-form {
+  margin-bottom: 18px;
+}
+
+.manage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.selector-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.selector-item input {
+  width: auto;
+  margin: 0;
+}
+
 .progress-track {
   height: 10px;
   margin: 12px 0 10px;
@@ -432,6 +470,44 @@ textarea {
   background: var(--carbs);
 }
 
+.accordion-card {
+  padding: 16px 18px;
+}
+
+.accordion-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.accordion-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.accordion-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(35, 80, 74, 0.1);
+  color: var(--secondary);
+  transition: transform 180ms ease;
+}
+
+.accordion-icon.is-open {
+  transform: rotate(180deg);
+}
+
 .notification-banner {
   padding: 18px;
   border-radius: 22px;
@@ -500,7 +576,8 @@ textarea {
   .mini-card__head,
   .month-switch,
   .notification-banner,
-  .progress-stats {
+  .progress-stats,
+  .accordion-toggle {
     flex-direction: column;
     align-items: flex-start;
   }

@@ -357,25 +357,105 @@ function FoodChip({ food, onClick }) {
   );
 }
 
-function MealSetCard({ mealSet, foodsById, onAdd }) {
+function MealSetCard({ mealSet, foodsById, onAdd, onEdit, onDelete }) {
   const foods = mealSet.foodIds.map((id) => foodsById[id]).filter(Boolean);
   const totals = sumNutrition(foods);
-  if (foods.length === 0) return null;
 
   return (
     <article className="mini-card">
       <div className="mini-card__head">
         <div>
           <h3>{mealSet.name}</h3>
-          <p>{foods.map((food) => food.name).join(" / ")}</p>
+          <p>{foods.length > 0 ? foods.map((food) => food.name).join(" / ") : "セット内容が未選択です"}</p>
         </div>
-        <button className="secondary-button" type="button" onClick={onAdd}>
+        <button className="secondary-button" type="button" onClick={onAdd} disabled={foods.length === 0}>
           記録
         </button>
       </div>
       <p className="meta-row">
         {totals.calories}kcal / P {totals.protein}g / F {totals.fat}g / C {totals.carbs}g
       </p>
+      <div className="inline-actions">
+        <button className="ghost-button" type="button" onClick={onEdit}>
+          編集
+        </button>
+        <button className="ghost-button" type="button" onClick={onDelete}>
+          削除
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function FoodManageCard({ food, onAdd, onEdit, onDelete }) {
+  return (
+    <article className="mini-card">
+      <div className="mini-card__head">
+        <div>
+          <h3>{food.name}</h3>
+          <p className="meta-row">{food.category}</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={onAdd}>
+          記録
+        </button>
+      </div>
+      <p className="meta-row">
+        {food.calories}kcal / P {food.protein}g / F {food.fat}g / C {food.carbs}g
+      </p>
+      <div className="inline-actions">
+        <button className="ghost-button" type="button" onClick={onEdit}>
+          編集
+        </button>
+        <button className="ghost-button" type="button" onClick={onDelete}>
+          削除
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function MealRecordAccordion({ label, items, isExpanded, onToggle, onRemoveEntry }) {
+  const totals = sumNutrition(items);
+  const pfc = calculatePfcPercentages(totals);
+
+  return (
+    <article className="goal-card accordion-card">
+      <button type="button" className="accordion-toggle" onClick={onToggle}>
+        <div>
+          <h3>{label}</h3>
+          <p className="meta-row">
+            {totals.calories}kcal / P {totals.protein}g / F {totals.fat}g / C {totals.carbs}g
+          </p>
+        </div>
+        <div className="accordion-side">
+          <span className="pill">{items.length}件</span>
+          <span className={isExpanded ? "accordion-icon is-open" : "accordion-icon"}>⌄</span>
+        </div>
+      </button>
+      <div className="pfc-bar">
+        <div className="pfc-segment protein" style={{ width: `${pfc.protein}%` }} />
+        <div className="pfc-segment fat" style={{ width: `${pfc.fat}%` }} />
+        <div className="pfc-segment carbs" style={{ width: `${pfc.carbs}%` }} />
+      </div>
+      {isExpanded && (
+        <div className="record-list">
+          {items.length === 0 && <p className="empty-state">まだ記録がありません。</p>}
+          {items.map((entry) => (
+            <article key={entry.entryId} className="record-card">
+              <div className="record-card__body">
+                <p className="record-card__title">{entry.name}</p>
+                <p className="record-card__meta">
+                  {entry.calories}kcal / P{entry.protein} F{entry.fat} C{entry.carbs}
+                </p>
+                {entry.setName && <p className="record-card__text">{entry.setName} から追加</p>}
+              </div>
+              <button type="button" className="ghost-button" onClick={() => onRemoveEntry(entry.entryId)}>
+                削除
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
     </article>
   );
 }
@@ -386,6 +466,12 @@ function App() {
   const [toast, setToast] = useState("");
   const [selectedMealDate, setSelectedMealDate] = useState(getTodayDateString());
   const [selectedMealKey, setSelectedMealKey] = useState("breakfast");
+  const [expandedMeals, setExpandedMeals] = useState({
+    breakfast: false,
+    lunch: false,
+    dinner: false,
+    snack: false,
+  });
   const [mealHistoryMonth, setMealHistoryMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -398,6 +484,20 @@ function App() {
     fat: "",
     carbs: "",
     category: "その他",
+  });
+  const [foodForm, setFoodForm] = useState({
+    id: null,
+    name: "",
+    calories: "",
+    protein: "",
+    fat: "",
+    carbs: "",
+    category: "主食",
+  });
+  const [mealSetForm, setMealSetForm] = useState({
+    id: null,
+    name: "",
+    foodIds: [],
   });
   const [routineForm, setRoutineForm] = useState({
     name: "",
@@ -555,6 +655,26 @@ function App() {
     });
   }
 
+  function resetFoodForm() {
+    setFoodForm({
+      id: null,
+      name: "",
+      calories: "",
+      protein: "",
+      fat: "",
+      carbs: "",
+      category: "主食",
+    });
+  }
+
+  function resetMealSetForm() {
+    setMealSetForm({
+      id: null,
+      name: "",
+      foodIds: [],
+    });
+  }
+
   function showToast(message) {
     setToast(message);
   }
@@ -602,7 +722,113 @@ function App() {
       carbs: "",
       category: "その他",
     });
-    showToast("記録しました");
+  }
+
+  function saveFood(event) {
+    event.preventDefault();
+    if (!foodForm.name.trim()) return;
+
+    const nextFood = {
+      id: foodForm.id || createId("food"),
+      name: foodForm.name.trim(),
+      calories: Number(foodForm.calories) || 0,
+      protein: Number(foodForm.protein) || 0,
+      fat: Number(foodForm.fat) || 0,
+      carbs: Number(foodForm.carbs) || 0,
+      category: foodForm.category,
+    };
+
+    setState((current) => ({
+      ...current,
+      meal: {
+        ...current.meal,
+        foods: foodForm.id
+          ? current.meal.foods.map((food) => (food.id === foodForm.id ? nextFood : food))
+          : [nextFood, ...current.meal.foods],
+      },
+    }));
+    resetFoodForm();
+    showToast(foodForm.id ? "更新しました" : "追加しました");
+  }
+
+  function startEditFood(food) {
+    setFoodForm({
+      id: food.id,
+      name: food.name,
+      calories: String(food.calories ?? ""),
+      protein: String(food.protein ?? ""),
+      fat: String(food.fat ?? ""),
+      carbs: String(food.carbs ?? ""),
+      category: food.category || "その他",
+    });
+  }
+
+  function deleteFood(foodId) {
+    setState((current) => ({
+      ...current,
+      meal: {
+        ...current.meal,
+        foods: current.meal.foods.filter((food) => food.id !== foodId),
+        mealSets: current.meal.mealSets.map((mealSet) => ({
+          ...mealSet,
+          foodIds: mealSet.foodIds.filter((id) => id !== foodId),
+        })),
+      },
+    }));
+    if (foodForm.id === foodId) resetFoodForm();
+    showToast("削除しました");
+  }
+
+  function toggleFoodInSet(foodId) {
+    setMealSetForm((current) => ({
+      ...current,
+      foodIds: current.foodIds.includes(foodId)
+        ? current.foodIds.filter((id) => id !== foodId)
+        : [...current.foodIds, foodId],
+    }));
+  }
+
+  function saveMealSet(event) {
+    event.preventDefault();
+    if (!mealSetForm.name.trim() || mealSetForm.foodIds.length === 0) return;
+
+    const nextSet = {
+      id: mealSetForm.id || createId("meal-set"),
+      name: mealSetForm.name.trim(),
+      foodIds: mealSetForm.foodIds,
+    };
+
+    setState((current) => ({
+      ...current,
+      meal: {
+        ...current.meal,
+        mealSets: mealSetForm.id
+          ? current.meal.mealSets.map((mealSet) => (mealSet.id === mealSetForm.id ? nextSet : mealSet))
+          : [nextSet, ...current.meal.mealSets],
+      },
+    }));
+    resetMealSetForm();
+    showToast(mealSetForm.id ? "更新しました" : "追加しました");
+  }
+
+  function startEditMealSet(mealSet) {
+    setMealSetForm({
+      id: mealSet.id,
+      name: mealSet.name,
+      foodIds: mealSet.foodIds,
+    });
+  }
+
+  function deleteMealSet(mealSetId) {
+    setState((current) => ({
+      ...current,
+      meal: {
+        ...current.meal,
+        mealSets: current.meal.mealSets.filter((mealSet) => mealSet.id !== mealSetId),
+      },
+    }));
+    if (mealSetForm.id === mealSetId) resetMealSetForm();
+    showToast("削除しました");
   }
 
   function removeMealEntry(date, mealKey, entryId) {
@@ -974,14 +1200,57 @@ function App() {
             <section className="panel">
               <div className="section-heading">
                 <h2>固定メニュー</h2>
+                <p>追加・編集・削除できます</p>
               </div>
+              <form className="form-grid meal-manage-form" onSubmit={saveFood}>
+                <label className="form-grid__full">
+                  <span>メニュー名</span>
+                  <input type="text" value={foodForm.name} onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })} placeholder="例: サラダチキン" />
+                </label>
+                <label>
+                  <span>カロリー</span>
+                  <input type="number" min="0" value={foodForm.calories} onChange={(event) => setFoodForm({ ...foodForm, calories: event.target.value })} />
+                </label>
+                <label>
+                  <span>カテゴリ</span>
+                  <select value={foodForm.category} onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value })}>
+                    {CATEGORY_OPTIONS.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>たんぱく質</span>
+                  <input type="number" min="0" value={foodForm.protein} onChange={(event) => setFoodForm({ ...foodForm, protein: event.target.value })} />
+                </label>
+                <label>
+                  <span>脂質</span>
+                  <input type="number" min="0" value={foodForm.fat} onChange={(event) => setFoodForm({ ...foodForm, fat: event.target.value })} />
+                </label>
+                <label className="form-grid__full">
+                  <span>炭水化物</span>
+                  <input type="number" min="0" value={foodForm.carbs} onChange={(event) => setFoodForm({ ...foodForm, carbs: event.target.value })} />
+                </label>
+                <div className="form-grid__full inline-actions">
+                  <button className="primary-button" type="submit">{foodForm.id ? "固定メニューを更新" : "固定メニューを追加"}</button>
+                  {foodForm.id && (
+                    <button className="ghost-button" type="button" onClick={resetFoodForm}>編集をやめる</button>
+                  )}
+                </div>
+              </form>
               <div className="chip-group-block">
                 {groupedFoods.map((group) => (
                   <div key={group.category} className="chip-section">
                     <p className="list-label">{group.category}</p>
-                    <div className="chip-grid">
+                    <div className="manage-grid">
                       {group.foods.map((food) => (
-                        <FoodChip key={food.id} food={food} onClick={() => addFoodToMeal(food)} />
+                        <FoodManageCard
+                          key={food.id}
+                          food={food}
+                          onAdd={() => addFoodToMeal(food)}
+                          onEdit={() => startEditFood(food)}
+                          onDelete={() => deleteFood(food.id)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -992,10 +1261,42 @@ function App() {
             <section className="panel">
               <div className="section-heading">
                 <h2>食事セット</h2>
+                <p>セット内容も編集できます</p>
               </div>
+              <form className="summary-stack meal-manage-form" onSubmit={saveMealSet}>
+                <label>
+                  <span>セット名</span>
+                  <input type="text" value={mealSetForm.name} onChange={(event) => setMealSetForm({ ...mealSetForm, name: event.target.value })} placeholder="例: 朝の定番" />
+                </label>
+                <div className="selector-grid">
+                  {state.meal.foods.map((food) => (
+                    <label key={food.id} className="selector-item">
+                      <input
+                        type="checkbox"
+                        checked={mealSetForm.foodIds.includes(food.id)}
+                        onChange={() => toggleFoodInSet(food.id)}
+                      />
+                      <span>{food.name}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="inline-actions">
+                  <button className="primary-button" type="submit">{mealSetForm.id ? "食事セットを更新" : "食事セットを追加"}</button>
+                  {mealSetForm.id && (
+                    <button className="ghost-button" type="button" onClick={resetMealSetForm}>編集をやめる</button>
+                  )}
+                </div>
+              </form>
               <div className="summary-stack">
                 {state.meal.mealSets.map((mealSet) => (
-                  <MealSetCard key={mealSet.id} mealSet={mealSet} foodsById={foodsById} onAdd={() => addSetToMeal(mealSet)} />
+                  <MealSetCard
+                    key={mealSet.id}
+                    mealSet={mealSet}
+                    foodsById={foodsById}
+                    onAdd={() => addSetToMeal(mealSet)}
+                    onEdit={() => startEditMealSet(mealSet)}
+                    onDelete={() => deleteMealSet(mealSet.id)}
+                  />
                 ))}
               </div>
             </section>
@@ -1040,42 +1341,25 @@ function App() {
             <section className="panel panel--highlight">
               <div className="section-heading">
                 <h2>{formatDate(selectedMealDate)} の記録</h2>
+                <p>タップで詳細を展開</p>
               </div>
               <div className="summary-stack">
                 {MEAL_KEYS.map((mealKey) => {
                   const items = mealRecord[mealKey];
-                  const totals = sumNutrition(items);
-                  const pfc = calculatePfcPercentages(totals);
                   return (
-                    <article key={mealKey} className="goal-card">
-                      <div className="mini-card__head">
-                        <h3>{MEAL_LABELS[mealKey]}</h3>
-                        <span className="pill">{items.length}件</span>
-                      </div>
-                      <p className="meta-row">
-                        {totals.calories}kcal / P {totals.protein}g / F {totals.fat}g / C {totals.carbs}g
-                      </p>
-                      <div className="pfc-bar">
-                        <div className="pfc-segment protein" style={{ width: `${pfc.protein}%` }} />
-                        <div className="pfc-segment fat" style={{ width: `${pfc.fat}%` }} />
-                        <div className="pfc-segment carbs" style={{ width: `${pfc.carbs}%` }} />
-                      </div>
-                      <div className="record-list">
-                        {items.length === 0 && <p className="empty-state">まだ記録がありません。</p>}
-                        {items.map((entry) => (
-                          <article key={entry.entryId} className="record-card">
-                            <div className="record-card__body">
-                              <p className="record-card__title">{entry.name}</p>
-                              <p className="record-card__meta">
-                                {entry.calories}kcal / P{entry.protein} F{entry.fat} C{entry.carbs}
-                              </p>
-                              {entry.setName && <p className="record-card__text">{entry.setName} から追加</p>}
-                            </div>
-                            <button type="button" className="ghost-button" onClick={() => removeMealEntry(selectedMealDate, mealKey, entry.entryId)}>削除</button>
-                          </article>
-                        ))}
-                      </div>
-                    </article>
+                    <MealRecordAccordion
+                      key={mealKey}
+                      label={MEAL_LABELS[mealKey]}
+                      items={items}
+                      isExpanded={expandedMeals[mealKey]}
+                      onToggle={() =>
+                        setExpandedMeals((current) => ({
+                          ...current,
+                          [mealKey]: !current[mealKey],
+                        }))
+                      }
+                      onRemoveEntry={(entryId) => removeMealEntry(selectedMealDate, mealKey, entryId)}
+                    />
                   );
                 })}
               </div>
