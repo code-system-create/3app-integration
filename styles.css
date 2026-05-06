@@ -171,6 +171,21 @@ button {
   font-size: clamp(1.7rem, 4vw, 2.3rem);
 }
 
+.stat-pfc-bar {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.stat-card--dual .dual-metric {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 6px;
+}
+
+.stat-card--dual strong {
+  margin: 0;
+}
+
 .stat-card--compact {
   padding: 14px 16px;
   border-radius: 18px;

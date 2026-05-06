@@ -552,6 +552,7 @@ function App() {
   const todayMealRecord = ensureMealRecordShape(state.meal.records[getTodayDateString()]);
   const todayMealItems = MEAL_KEYS.flatMap((mealKey) => todayMealRecord[mealKey]);
   const todayMealTotals = sumNutrition(todayMealItems);
+  const todayMealPfc = calculatePfcPercentages(todayMealTotals);
   const mealHistoryEntries = useMemo(() => {
     return Object.entries(state.meal.records)
       .map(([date, record]) => {
@@ -1095,16 +1096,32 @@ function App() {
                 <span>今日の食事</span>
                 <strong>{todayMealTotals.calories} kcal</strong>
                 <small>P {todayMealTotals.protein} / F {todayMealTotals.fat} / C {todayMealTotals.carbs}</small>
+                <div className="pfc-bar stat-pfc-bar">
+                  <div className="pfc-segment protein" style={{ width: `${todayMealPfc.protein}%` }} />
+                  <div className="pfc-segment fat" style={{ width: `${todayMealPfc.fat}%` }} />
+                  <div className="pfc-segment carbs" style={{ width: `${todayMealPfc.carbs}%` }} />
+                </div>
               </article>
               <article className="stat-card">
                 <span>今日のリマインド</span>
-                <strong>{pendingTodayRoutines.length} 件</strong>
-                <small>完了済み {completedTodayRoutines.length} 件</small>
+                <strong>{pendingTodayRoutines.length === 0 ? "予定なし" : pendingTodayRoutines[0].name}</strong>
+                <small>
+                  {pendingTodayRoutines.length > 1
+                    ? `ほか ${pendingTodayRoutines.length - 1} 件`
+                    : pendingTodayRoutines.length === 1
+                      ? `${pendingTodayRoutines[0].category} / ${getFrequencyLabel(pendingTodayRoutines[0].frequencyType, pendingTodayRoutines[0].interval)}`
+                      : completedTodayRoutines.length > 0
+                        ? `完了済み: ${completedTodayRoutines.map((routine) => routine.name).join(" / ")}`
+                        : "未完了のリマインドはありません"}
+                </small>
               </article>
-              <article className="stat-card">
+              <article className="stat-card stat-card--dual">
                 <span>今日の我慢ログ</span>
-                <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
-                <small>{todaySavedCalories.toLocaleString("ja-JP")} kcal をセーブ</small>
+                <div className="dual-metric">
+                  <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
+                  <strong>{todaySavedCalories.toLocaleString("ja-JP")} kcal</strong>
+                </div>
+                <small>お金とカロリーの両方を確認できます</small>
               </article>
             </section>
 
