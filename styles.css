@@ -168,7 +168,7 @@ button {
 .stat-card strong {
   display: block;
   margin: 8px 0 6px;
-  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-size: clamp(1.2rem, 3vw, 1.65rem);
 }
 
 .stat-pfc-bar {
@@ -184,6 +184,7 @@ button {
 
 .stat-card--dual strong {
   margin: 0;
+  font-size: clamp(1.2rem, 3vw, 1.65rem);
 }
 
 .stat-card--compact {
