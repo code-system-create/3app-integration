@@ -130,6 +130,10 @@ button {
   margin-bottom: 18px;
 }
 
+.subheading {
+  margin-top: 18px;
+}
+
 .section-heading h2,
 .section-heading h3,
 .mini-card h3,
@@ -350,6 +354,14 @@ textarea {
 }
 
 .meal-manage-form {
+  margin-bottom: 18px;
+}
+
+.manage-toggle-row {
+  margin-bottom: 18px;
+}
+
+.manage-list-block {
   margin-bottom: 18px;
 }
 

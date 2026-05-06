@@ -466,6 +466,10 @@ function App() {
   const [toast, setToast] = useState("");
   const [selectedMealDate, setSelectedMealDate] = useState(getTodayDateString());
   const [selectedMealKey, setSelectedMealKey] = useState("breakfast");
+  const [showFoodForm, setShowFoodForm] = useState(false);
+  const [showMealSetForm, setShowMealSetForm] = useState(false);
+  const [showFoodList, setShowFoodList] = useState(false);
+  const [showMealSetList, setShowMealSetList] = useState(false);
   const [expandedMeals, setExpandedMeals] = useState({
     breakfast: false,
     lunch: false,
@@ -656,6 +660,7 @@ function App() {
   }
 
   function resetFoodForm() {
+    setShowFoodForm(false);
     setFoodForm({
       id: null,
       name: "",
@@ -668,6 +673,7 @@ function App() {
   }
 
   function resetMealSetForm() {
+    setShowMealSetForm(false);
     setMealSetForm({
       id: null,
       name: "",
@@ -752,6 +758,7 @@ function App() {
   }
 
   function startEditFood(food) {
+    setShowFoodForm(true);
     setFoodForm({
       id: food.id,
       name: food.name,
@@ -812,6 +819,7 @@ function App() {
   }
 
   function startEditMealSet(mealSet) {
+    setShowMealSetForm(true);
     setMealSetForm({
       id: mealSet.id,
       name: mealSet.name,
@@ -1195,62 +1203,33 @@ function App() {
                   </select>
                 </label>
               </div>
-            </section>
-
-            <section className="panel">
-              <div className="section-heading">
-                <h2>固定メニュー</h2>
-                <p>追加・編集・削除できます</p>
+              <div className="section-heading subheading">
+                <h3>ワンタップで記録</h3>
+                <p>{MEAL_LABELS[selectedMealKey]} に追加</p>
               </div>
-              <form className="form-grid meal-manage-form" onSubmit={saveFood}>
-                <label className="form-grid__full">
-                  <span>メニュー名</span>
-                  <input type="text" value={foodForm.name} onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })} placeholder="例: サラダチキン" />
-                </label>
-                <label>
-                  <span>カロリー</span>
-                  <input type="number" min="0" value={foodForm.calories} onChange={(event) => setFoodForm({ ...foodForm, calories: event.target.value })} />
-                </label>
-                <label>
-                  <span>カテゴリ</span>
-                  <select value={foodForm.category} onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value })}>
-                    {CATEGORY_OPTIONS.map((category) => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>たんぱく質</span>
-                  <input type="number" min="0" value={foodForm.protein} onChange={(event) => setFoodForm({ ...foodForm, protein: event.target.value })} />
-                </label>
-                <label>
-                  <span>脂質</span>
-                  <input type="number" min="0" value={foodForm.fat} onChange={(event) => setFoodForm({ ...foodForm, fat: event.target.value })} />
-                </label>
-                <label className="form-grid__full">
-                  <span>炭水化物</span>
-                  <input type="number" min="0" value={foodForm.carbs} onChange={(event) => setFoodForm({ ...foodForm, carbs: event.target.value })} />
-                </label>
-                <div className="form-grid__full inline-actions">
-                  <button className="primary-button" type="submit">{foodForm.id ? "固定メニューを更新" : "固定メニューを追加"}</button>
-                  {foodForm.id && (
-                    <button className="ghost-button" type="button" onClick={resetFoodForm}>編集をやめる</button>
-                  )}
-                </div>
-              </form>
               <div className="chip-group-block">
+                <div className="chip-section">
+                  <p className="list-label">食事セットをワンタップで記録</p>
+                  <div className="chip-grid">
+                    {state.meal.mealSets.map((mealSet) => (
+                      <button
+                        key={mealSet.id}
+                        className="chip-button"
+                        type="button"
+                        onClick={() => addSetToMeal(mealSet)}
+                      >
+                        <span>{mealSet.name}</span>
+                        <small>{mealSet.foodIds.length}品を追加</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {groupedFoods.map((group) => (
                   <div key={group.category} className="chip-section">
-                    <p className="list-label">{group.category}</p>
-                    <div className="manage-grid">
+                    <p className="list-label">{group.category} をワンタップで記録</p>
+                    <div className="chip-grid">
                       {group.foods.map((food) => (
-                        <FoodManageCard
-                          key={food.id}
-                          food={food}
-                          onAdd={() => addFoodToMeal(food)}
-                          onEdit={() => startEditFood(food)}
-                          onDelete={() => deleteFood(food.id)}
-                        />
+                        <FoodChip key={food.id} food={food} onClick={() => addFoodToMeal(food)} />
                       ))}
                     </div>
                   </div>
@@ -1260,45 +1239,91 @@ function App() {
 
             <section className="panel">
               <div className="section-heading">
-                <h2>食事セット</h2>
-                <p>セット内容も編集できます</p>
+                <h2>追加セクション</h2>
+                <p>必要なときだけ展開</p>
               </div>
-              <form className="summary-stack meal-manage-form" onSubmit={saveMealSet}>
-                <label>
-                  <span>セット名</span>
-                  <input type="text" value={mealSetForm.name} onChange={(event) => setMealSetForm({ ...mealSetForm, name: event.target.value })} placeholder="例: 朝の定番" />
-                </label>
-                <div className="selector-grid">
-                  {state.meal.foods.map((food) => (
-                    <label key={food.id} className="selector-item">
-                      <input
-                        type="checkbox"
-                        checked={mealSetForm.foodIds.includes(food.id)}
-                        onChange={() => toggleFoodInSet(food.id)}
-                      />
-                      <span>{food.name}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="inline-actions">
-                  <button className="primary-button" type="submit">{mealSetForm.id ? "食事セットを更新" : "食事セットを追加"}</button>
-                  {mealSetForm.id && (
-                    <button className="ghost-button" type="button" onClick={resetMealSetForm}>編集をやめる</button>
-                  )}
-                </div>
-              </form>
-              <div className="summary-stack">
-                {state.meal.mealSets.map((mealSet) => (
-                  <MealSetCard
-                    key={mealSet.id}
-                    mealSet={mealSet}
-                    foodsById={foodsById}
-                    onAdd={() => addSetToMeal(mealSet)}
-                    onEdit={() => startEditMealSet(mealSet)}
-                    onDelete={() => deleteMealSet(mealSet.id)}
-                  />
-                ))}
+              <div className="inline-actions manage-toggle-row">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    setShowFoodForm((current) => !current);
+                    if (showMealSetForm) setShowMealSetForm(false);
+                  }}
+                >
+                  {showFoodForm ? "固定メニュー追加を閉じる" : "固定メニュー追加"}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    setShowMealSetForm((current) => !current);
+                    if (showFoodForm) setShowFoodForm(false);
+                  }}
+                >
+                  {showMealSetForm ? "食事セット追加を閉じる" : "食事セット追加"}
+                </button>
               </div>
+              {showFoodForm && (
+                <form className="form-grid meal-manage-form" onSubmit={saveFood}>
+                  <label className="form-grid__full">
+                    <span>メニュー名</span>
+                    <input type="text" value={foodForm.name} onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })} placeholder="例: サラダチキン" />
+                  </label>
+                  <label>
+                    <span>カロリー</span>
+                    <input type="number" min="0" value={foodForm.calories} onChange={(event) => setFoodForm({ ...foodForm, calories: event.target.value })} />
+                  </label>
+                  <label>
+                    <span>カテゴリ</span>
+                    <select value={foodForm.category} onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value })}>
+                      {CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>たんぱく質</span>
+                    <input type="number" min="0" value={foodForm.protein} onChange={(event) => setFoodForm({ ...foodForm, protein: event.target.value })} />
+                  </label>
+                  <label>
+                    <span>脂質</span>
+                    <input type="number" min="0" value={foodForm.fat} onChange={(event) => setFoodForm({ ...foodForm, fat: event.target.value })} />
+                  </label>
+                  <label className="form-grid__full">
+                    <span>炭水化物</span>
+                    <input type="number" min="0" value={foodForm.carbs} onChange={(event) => setFoodForm({ ...foodForm, carbs: event.target.value })} />
+                  </label>
+                  <div className="form-grid__full inline-actions">
+                    <button className="primary-button" type="submit">{foodForm.id ? "固定メニューを更新" : "固定メニューを追加"}</button>
+                    <button className="ghost-button" type="button" onClick={resetFoodForm}>閉じる</button>
+                  </div>
+                </form>
+              )}
+              {showMealSetForm && (
+                <form className="summary-stack meal-manage-form" onSubmit={saveMealSet}>
+                  <label>
+                    <span>セット名</span>
+                    <input type="text" value={mealSetForm.name} onChange={(event) => setMealSetForm({ ...mealSetForm, name: event.target.value })} placeholder="例: 朝の定番" />
+                  </label>
+                  <div className="selector-grid">
+                    {state.meal.foods.map((food) => (
+                      <label key={food.id} className="selector-item">
+                        <input
+                          type="checkbox"
+                          checked={mealSetForm.foodIds.includes(food.id)}
+                          onChange={() => toggleFoodInSet(food.id)}
+                        />
+                        <span>{food.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="inline-actions">
+                    <button className="primary-button" type="submit">{mealSetForm.id ? "食事セットを更新" : "食事セットを追加"}</button>
+                    <button className="ghost-button" type="button" onClick={resetMealSetForm}>閉じる</button>
+                  </div>
+                </form>
+              )}
             </section>
 
             <section className="panel">
@@ -1413,6 +1438,64 @@ function App() {
                         </article>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>一覧管理</h2>
+                <p>必要なときだけ展開</p>
+              </div>
+              <div className="inline-actions manage-toggle-row">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setShowFoodList((current) => !current)}
+                >
+                  {showFoodList ? "固定メニュー一覧を閉じる" : "固定メニュー一覧"}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setShowMealSetList((current) => !current)}
+                >
+                  {showMealSetList ? "食事セット一覧を閉じる" : "食事セット一覧"}
+                </button>
+              </div>
+              <div className="summary-stack manage-list-block">
+                {showFoodList && (
+                  <div>
+                  <p className="list-label">固定メニュー一覧</p>
+                  <div className="manage-grid">
+                    {state.meal.foods.map((food) => (
+                      <FoodManageCard
+                        key={food.id}
+                        food={food}
+                        onAdd={() => addFoodToMeal(food)}
+                        onEdit={() => startEditFood(food)}
+                        onDelete={() => deleteFood(food.id)}
+                      />
+                    ))}
+                  </div>
+                  </div>
+                )}
+                {showMealSetList && (
+                  <div>
+                  <p className="list-label">食事セット一覧</p>
+                  <div className="summary-stack">
+                    {state.meal.mealSets.map((mealSet) => (
+                      <MealSetCard
+                        key={mealSet.id}
+                        mealSet={mealSet}
+                        foodsById={foodsById}
+                        onAdd={() => addSetToMeal(mealSet)}
+                        onEdit={() => startEditMealSet(mealSet)}
+                        onDelete={() => deleteMealSet(mealSet.id)}
+                      />
+                    ))}
+                  </div>
                   </div>
                 )}
               </div>
