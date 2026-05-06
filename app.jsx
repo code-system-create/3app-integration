@@ -1,235 +1,821 @@
-const { useEffect, useMemo, useState } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
-const STORAGE_KEY = "three-app-integration-state";
+const STORAGE_KEY = "three-app-integration-state-v2";
 
-const mealTypes = ["朝食", "昼食", "夕食", "間食"];
-const cravingTypes = ["お菓子", "夜更かし", "衝動買い", "SNS", "その他"];
-const tabs = [
-  { id: "home", label: "ホーム" },
-  { id: "meals", label: "食事記録" },
-  { id: "reminders", label: "リマインド" },
-  { id: "resist", label: "我慢ログ" },
+const CATEGORY_OPTIONS = ["主食", "メイン", "副菜", "おやつ", "ドリンク", "その他"];
+const MEAL_LABELS = {
+  breakfast: "朝",
+  lunch: "昼",
+  dinner: "夜",
+  snack: "間食",
+};
+const MEAL_KEYS = Object.keys(MEAL_LABELS);
+const ROUTINE_CATEGORIES = ["スキンケア", "コンタクト", "健康", "家事", "その他"];
+const FREQUENCY_TYPES = ["毎日", "日ごと", "週間ごと", "ヶ月ごと"];
+
+const INITIAL_FOODS = [
+  { id: "food-protein", name: "プロテイン", calories: 100, protein: 20, fat: 1, carbs: 3, category: "メイン" },
+  { id: "food-tofu", name: "豆腐", calories: 90, protein: 7, fat: 5, carbs: 3, category: "副菜" },
+  { id: "food-egg", name: "卵", calories: 80, protein: 6, fat: 5, carbs: 0, category: "メイン" },
+  { id: "food-rice-porridge", name: "おかゆ", calories: 150, protein: 3, fat: 1, carbs: 32, category: "主食" },
+  { id: "food-miso-soup", name: "味噌汁", calories: 50, protein: 3, fat: 2, carbs: 5, category: "副菜" },
+  { id: "food-mekabu", name: "めかぶ", calories: 10, protein: 1, fat: 0, carbs: 2, category: "副菜" },
+  { id: "food-tuna", name: "ツナ缶", calories: 120, protein: 16, fat: 6, carbs: 0, category: "メイン" },
+  { id: "food-sakekasu", name: "酒粕きなこはちみつ", calories: 180, protein: 7, fat: 5, carbs: 25, category: "おやつ" },
+  { id: "food-cafe-latte", name: "カフェラテ", calories: 150, protein: 8, fat: 8, carbs: 12, category: "ドリンク" },
 ];
 
-const nowLocal = () => {
+const INITIAL_MEAL_SETS = [
+  {
+    id: "set-morning",
+    name: "朝の定番",
+    foodIds: ["food-protein", "food-tofu", "food-egg", "food-rice-porridge", "food-miso-soup", "food-mekabu"],
+  },
+  {
+    id: "set-light-dinner",
+    name: "夜の軽め",
+    foodIds: ["food-rice-porridge", "food-egg", "food-tuna", "food-miso-soup"],
+  },
+  {
+    id: "set-sakekasu",
+    name: "酒粕セット",
+    foodIds: ["food-sakekasu"],
+  },
+];
+
+function createId(prefix = "id") {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getLocalNow() {
   const date = new Date();
   const offset = date.getTimezoneOffset();
-  const localDate = new Date(date.getTime() - offset * 60 * 1000);
-  return localDate.toISOString().slice(0, 16);
-};
-const today = () => nowLocal().slice(0, 10);
+  return new Date(date.getTime() - offset * 60 * 1000);
+}
 
-function parseDateValue(value) {
-  if (!value) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
+function getTodayDateString() {
+  return getLocalNow().toISOString().slice(0, 10);
+}
+
+function getLocalDateTimeString() {
+  return getLocalNow().toISOString().slice(0, 16);
+}
+
+function parseLocalDate(dateString) {
+  if (!dateString) return new Date();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [year, month, day] = dateString.split("-").map(Number);
     return new Date(year, month - 1, day);
   }
-  return new Date(value);
+  return new Date(dateString);
 }
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return { meals: [], reminders: [], resistLogs: [] };
-    }
-
-    const parsed = JSON.parse(raw);
-    return {
-      meals: Array.isArray(parsed.meals) ? parsed.meals : [],
-      reminders: Array.isArray(parsed.reminders) ? parsed.reminders : [],
-      resistLogs: Array.isArray(parsed.resistLogs) ? parsed.resistLogs : [],
-    };
-  } catch (error) {
-    console.error("Failed to load local data:", error);
-    return { meals: [], reminders: [], resistLogs: [] };
-  }
-}
-
-function formatDate(value) {
-  if (!value) return "未設定";
+function formatDate(dateString) {
   return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
     month: "numeric",
     day: "numeric",
     weekday: "short",
-  }).format(parseDateValue(value));
+  }).format(parseLocalDate(dateString));
 }
 
-function formatDateTime(value) {
-  if (!value) return "未設定";
+function formatDateTime(dateString) {
   return new Intl.DateTimeFormat("ja-JP", {
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(parseDateValue(value));
+  }).format(parseLocalDate(dateString));
+}
+
+function formatMonthLabel(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "long",
+  }).format(date);
+}
+
+function createMonthDate(year, monthIndex, day = 1) {
+  return new Date(year, monthIndex, day);
+}
+
+function getCalendarDays(baseDate) {
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const firstDay = createMonthDate(year, month, 1);
+  const lastDay = createMonthDate(year, month + 1, 0);
+  const startOffset = firstDay.getDay();
+  const cells = [];
+
+  for (let index = 0; index < startOffset; index += 1) {
+    cells.push(null);
+  }
+
+  for (let day = 1; day <= lastDay.getDate(); day += 1) {
+    cells.push(createMonthDate(year, month, day));
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  return cells;
+}
+
+function sumNutrition(items) {
+  return items.reduce(
+    (total, item) => {
+      total.calories += Number(item.calories || 0);
+      total.protein += Number(item.protein || 0);
+      total.fat += Number(item.fat || 0);
+      total.carbs += Number(item.carbs || 0);
+      return total;
+    },
+    { calories: 0, protein: 0, fat: 0, carbs: 0 }
+  );
+}
+
+function calculatePfcPercentages(totals) {
+  const proteinCalories = totals.protein * 4;
+  const fatCalories = totals.fat * 9;
+  const carbsCalories = totals.carbs * 4;
+  const totalMacroCalories = proteinCalories + fatCalories + carbsCalories;
+
+  if (!totalMacroCalories) return { protein: 0, fat: 0, carbs: 0 };
+
+  return {
+    protein: Math.round((proteinCalories / totalMacroCalories) * 100),
+    fat: Math.round((fatCalories / totalMacroCalories) * 100),
+    carbs: Math.round((carbsCalories / totalMacroCalories) * 100),
+  };
+}
+
+function ensureMealRecordShape(record) {
+  return {
+    breakfast: Array.isArray(record?.breakfast) ? record.breakfast : [],
+    lunch: Array.isArray(record?.lunch) ? record.lunch : [],
+    dinner: Array.isArray(record?.dinner) ? record.dinner : [],
+    snack: Array.isArray(record?.snack) ? record.snack : [],
+  };
+}
+
+function buildMealEntry(foodLike, source, setName = "") {
+  return {
+    entryId: createId("meal-entry"),
+    foodId: foodLike.id || null,
+    name: foodLike.name,
+    calories: Number(foodLike.calories) || 0,
+    protein: Number(foodLike.protein) || 0,
+    fat: Number(foodLike.fat) || 0,
+    carbs: Number(foodLike.carbs) || 0,
+    category: foodLike.category || "その他",
+    source,
+    setName,
+    recordedAt: new Date().toISOString(),
+  };
+}
+
+function groupFoodsByCategory(foods) {
+  const groups = CATEGORY_OPTIONS.map((category) => ({
+    category,
+    foods: foods.filter((food) => food.category === category),
+  })).filter((group) => group.foods.length > 0);
+
+  const extraFoods = foods.filter((food) => !CATEGORY_OPTIONS.includes(food.category));
+  if (extraFoods.length > 0) {
+    groups.push({ category: "その他", foods: extraFoods });
+  }
+
+  return groups;
+}
+
+function calculateNextDueDate(baseDateString, frequencyType, interval) {
+  const nextDate = parseLocalDate(baseDateString);
+
+  switch (frequencyType) {
+    case "毎日":
+      nextDate.setDate(nextDate.getDate() + 1);
+      break;
+    case "日ごと":
+      nextDate.setDate(nextDate.getDate() + Number(interval || 1));
+      break;
+    case "週間ごと":
+      nextDate.setDate(nextDate.getDate() + Number(interval || 1) * 7);
+      break;
+    case "ヶ月ごと":
+      nextDate.setMonth(nextDate.getMonth() + Number(interval || 1));
+      break;
+    default:
+      nextDate.setDate(nextDate.getDate() + 1);
+  }
+
+  return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
+}
+
+function getFrequencyLabel(frequencyType, interval) {
+  if (frequencyType === "毎日") return "毎日";
+  if (frequencyType === "日ごと") return `${interval}日ごと`;
+  if (frequencyType === "週間ごと") return `${interval}週間ごと`;
+  if (frequencyType === "ヶ月ごと") return `${interval}ヶ月ごと`;
+  return frequencyType;
+}
+
+function getNotificationSupport() {
+  if (typeof window === "undefined") {
+    return { available: false, reason: "通知はこの端末では利用できません" };
+  }
+
+  const supportsNotification = "Notification" in window;
+  const isFilePreview = window.location.protocol === "file:";
+  const isSecure = window.isSecureContext || isFilePreview;
+
+  if (!supportsNotification || !isSecure) {
+    return { available: false, reason: "通知はこの端末では利用できません" };
+  }
+
+  return { available: true, reason: "" };
+}
+
+function buildReminderNotificationBody(routines) {
+  const names = routines.slice(0, 3).map((routine) => `・${routine.name}`);
+  const extraCount = routines.length - names.length;
+  return ["今日のリマインドがあります。", ...names, extraCount > 0 ? `・ほか${extraCount}件` : ""]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function priorityLabel(priority) {
+  if (priority === "high") return "高";
+  if (priority === "medium") return "中";
+  return "低";
+}
+
+function formatAmount(value, prefix, unit) {
+  if (prefix) return `${prefix}${value.toLocaleString("ja-JP")}`;
+  return `${value.toLocaleString("ja-JP")} ${unit}`;
+}
+
+function sumMoney(records) {
+  return records.reduce((sum, record) => sum + Number(record.money || 0), 0);
+}
+
+function sumCalories(records) {
+  return records.reduce((sum, record) => sum + Number(record.calories || 0), 0);
+}
+
+function normalizeSaveRecord(record) {
+  if (!record || typeof record !== "object") return null;
+  const createdAt = record.createdAt || new Date().toISOString();
+  const date = record.date || getTodayDateString();
+  return {
+    id: record.id || createId("save-record"),
+    date,
+    entryType: record.entryType || "money",
+    itemName: record.itemName || "",
+    money: Number(record.money) || 0,
+    calories: Number(record.calories) || 0,
+    memo: record.memo || "",
+    createdAt,
+  };
+}
+
+function createInitialState() {
+  return {
+    meal: {
+      foods: INITIAL_FOODS,
+      mealSets: INITIAL_MEAL_SETS,
+      records: {},
+    },
+    routines: [
+      {
+        id: createId("routine"),
+        name: "夜のスキンケア",
+        category: "スキンケア",
+        frequencyType: "毎日",
+        interval: 1,
+        startDate: getTodayDateString(),
+        nextDueDate: getTodayDateString(),
+        lastCompletedAt: null,
+        completedForDate: null,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: createId("routine"),
+        name: "コンタクト交換",
+        category: "コンタクト",
+        frequencyType: "週間ごと",
+        interval: 2,
+        startDate: getTodayDateString(),
+        nextDueDate: getTodayDateString(),
+        lastCompletedAt: null,
+        completedForDate: null,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    save: {
+      records: [],
+      goals: [],
+    },
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createInitialState();
+    const parsed = JSON.parse(raw);
+    const initial = createInitialState();
+    return {
+      meal: {
+        foods: Array.isArray(parsed?.meal?.foods) ? parsed.meal.foods : initial.meal.foods,
+        mealSets: Array.isArray(parsed?.meal?.mealSets) ? parsed.meal.mealSets : initial.meal.mealSets,
+        records: parsed?.meal?.records && typeof parsed.meal.records === "object" ? parsed.meal.records : {},
+      },
+      routines: Array.isArray(parsed?.routines)
+        ? parsed.routines.map((routine) => ({ completedForDate: null, ...routine }))
+        : initial.routines,
+      save: {
+        records: Array.isArray(parsed?.save?.records)
+          ? parsed.save.records.map(normalizeSaveRecord).filter(Boolean)
+          : [],
+        goals: Array.isArray(parsed?.save?.goals) ? parsed.save.goals : [],
+      },
+    };
+  } catch (error) {
+    console.error("Failed to load state:", error);
+    return createInitialState();
+  }
+}
+
+function FoodChip({ food, onClick }) {
+  return (
+    <button className="chip-button" onClick={onClick} type="button">
+      <span>{food.name}</span>
+      <small>{food.calories}kcal</small>
+    </button>
+  );
+}
+
+function MealSetCard({ mealSet, foodsById, onAdd }) {
+  const foods = mealSet.foodIds.map((id) => foodsById[id]).filter(Boolean);
+  const totals = sumNutrition(foods);
+  if (foods.length === 0) return null;
+
+  return (
+    <article className="mini-card">
+      <div className="mini-card__head">
+        <div>
+          <h3>{mealSet.name}</h3>
+          <p>{foods.map((food) => food.name).join(" / ")}</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={onAdd}>
+          記録
+        </button>
+      </div>
+      <p className="meta-row">
+        {totals.calories}kcal / P {totals.protein}g / F {totals.fat}g / C {totals.carbs}g
+      </p>
+    </article>
+  );
 }
 
 function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [state, setState] = useState(loadState);
-  const [mealForm, setMealForm] = useState({
-    date: today(),
-    type: mealTypes[0],
-    title: "",
-    note: "",
+  const [selectedMealDate, setSelectedMealDate] = useState(getTodayDateString());
+  const [selectedMealKey, setSelectedMealKey] = useState("breakfast");
+  const [mealHistoryMonth, setMealHistoryMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [reminderForm, setReminderForm] = useState({
-    title: "",
-    dueAt: nowLocal(),
-    detail: "",
+  const [mealHistoryDate, setMealHistoryDate] = useState(getTodayDateString());
+  const [freeMealForm, setFreeMealForm] = useState({
+    name: "",
+    calories: "",
+    protein: "",
+    fat: "",
+    carbs: "",
+    category: "その他",
   });
-  const [resistForm, setResistForm] = useState({
-    date: today(),
-    type: cravingTypes[0],
-    level: 3,
-    minutes: 10,
+  const [routineForm, setRoutineForm] = useState({
+    name: "",
+    category: "スキンケア",
+    frequencyType: "毎日",
+    interval: 1,
+    startDate: getTodayDateString(),
+  });
+  const [saveRecordForm, setSaveRecordForm] = useState({
+    itemName: "",
+    entryType: "money",
+    money: "",
+    calories: "",
     memo: "",
   });
+  const [goalForm, setGoalForm] = useState({
+    type: "money",
+    name: "",
+    target: "",
+    priority: "high",
+  });
+  const [saveHistoryMonth, setSaveHistoryMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [saveHistoryDate, setSaveHistoryDate] = useState(getTodayDateString());
+  const [notificationPermission, setNotificationPermission] = useState(() =>
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission
+  );
+  const hasNotifiedThisSession = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
-  const sortedMeals = useMemo(
+  const foodsById = useMemo(
+    () => Object.fromEntries(state.meal.foods.map((food) => [food.id, food])),
+    [state.meal.foods]
+  );
+  const groupedFoods = useMemo(() => groupFoodsByCategory(state.meal.foods), [state.meal.foods]);
+  const mealRecord = ensureMealRecordShape(state.meal.records[selectedMealDate]);
+  const todayMealRecord = ensureMealRecordShape(state.meal.records[getTodayDateString()]);
+  const todayMealItems = MEAL_KEYS.flatMap((mealKey) => todayMealRecord[mealKey]);
+  const todayMealTotals = sumNutrition(todayMealItems);
+  const mealHistoryEntries = useMemo(() => {
+    return Object.entries(state.meal.records)
+      .map(([date, record]) => {
+        const normalized = ensureMealRecordShape(record);
+        const items = MEAL_KEYS.flatMap((mealKey) => normalized[mealKey]);
+        return { date, meals: normalized, totals: sumNutrition(items) };
+      })
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [state.meal.records]);
+  const mealHistoryByDate = useMemo(
+    () => Object.fromEntries(mealHistoryEntries.map((entry) => [entry.date, entry])),
+    [mealHistoryEntries]
+  );
+  const selectedMealHistoryEntry = mealHistoryByDate[mealHistoryDate] || null;
+  const mealCalendarDays = useMemo(() => getCalendarDays(mealHistoryMonth), [mealHistoryMonth]);
+
+  const today = getTodayDateString();
+  const todayRoutines = useMemo(
     () =>
-      [...state.meals].sort((a, b) => {
-        return parseDateValue(b.date) - parseDateValue(a.date);
-      }),
-    [state.meals]
+      state.routines
+        .filter((routine) => routine.nextDueDate <= today || routine.completedForDate === today)
+        .sort((a, b) => {
+          const aDone = a.completedForDate === today ? 1 : 0;
+          const bDone = b.completedForDate === today ? 1 : 0;
+          if (aDone !== bDone) return aDone - bDone;
+          return a.name.localeCompare(b.name, "ja");
+        }),
+    [state.routines, today]
   );
-
-  const sortedReminders = useMemo(
-    () =>
-      [...state.reminders].sort((a, b) => {
-        if (a.done !== b.done) return a.done - b.done;
-        return parseDateValue(a.dueAt) - parseDateValue(b.dueAt);
-      }),
-    [state.reminders]
+  const pendingTodayRoutines = useMemo(
+    () => todayRoutines.filter((routine) => routine.completedForDate !== today),
+    [todayRoutines, today]
   );
-
-  const sortedResistLogs = useMemo(
-    () =>
-      [...state.resistLogs].sort((a, b) => {
-        return parseDateValue(b.date) - parseDateValue(a.date);
-      }),
-    [state.resistLogs]
+  const completedTodayRoutines = useMemo(
+    () => todayRoutines.filter((routine) => routine.completedForDate === today),
+    [todayRoutines, today]
   );
+  const notificationSupport = getNotificationSupport();
 
-  const upcomingCount = sortedReminders.filter((item) => !item.done).length;
-  const totalResistMinutes = sortedResistLogs.reduce(
-    (sum, item) => sum + Number(item.minutes || 0),
-    0
+  useEffect(() => {
+    if (
+      !notificationSupport.available ||
+      notificationPermission !== "granted" ||
+      pendingTodayRoutines.length === 0 ||
+      hasNotifiedThisSession.current
+    ) {
+      return;
+    }
+
+    const notification = new Notification("Routine Reminder", {
+      body: buildReminderNotificationBody(pendingTodayRoutines),
+      tag: `routine-reminder-${today}`,
+    });
+
+    hasNotifiedThisSession.current = true;
+    notification.onclick = () => window.focus();
+  }, [notificationPermission, notificationSupport.available, pendingTodayRoutines, today]);
+
+  const saveRecords = useMemo(
+    () => [...state.save.records].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    [state.save.records]
   );
+  const todaySaveRecords = saveRecords.filter((record) => record.date === today);
+  const totalSavedMoney = sumMoney(saveRecords);
+  const totalSavedCalories = sumCalories(saveRecords);
+  const todaySavedMoney = sumMoney(todaySaveRecords);
+  const todaySavedCalories = sumCalories(todaySaveRecords);
+  const sortedGoals = useMemo(() => {
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    return [...state.save.goals].sort((a, b) => {
+      if (a.type !== b.type) return a.type.localeCompare(b.type);
+      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }, [state.save.goals]);
+  const activeMoneyGoal = sortedGoals.find((goal) => goal.type === "money");
+  const activeCalorieGoal = sortedGoals.find((goal) => goal.type === "calorie");
+  const saveCalendarDays = useMemo(() => getCalendarDays(saveHistoryMonth), [saveHistoryMonth]);
+  const saveRecordsByDate = useMemo(() => {
+    const map = {};
+    saveRecords.forEach((record) => {
+      map[record.date] = map[record.date] || [];
+      map[record.date].push(record);
+    });
+    return map;
+  }, [saveRecords]);
+  const saveHistoryRecords = saveRecordsByDate[saveHistoryDate] || [];
 
-  function addMeal(event) {
-    event.preventDefault();
-    if (!mealForm.title.trim()) return;
-
-    const entry = {
-      id: crypto.randomUUID(),
-      ...mealForm,
-      title: mealForm.title.trim(),
-      note: mealForm.note.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    setState((current) => ({
-      ...current,
-      meals: [entry, ...current.meals],
-    }));
-    setMealForm({
-      date: today(),
-      type: mealTypes[0],
-      title: "",
-      note: "",
+  function updateMealRecords(date, updater) {
+    setState((current) => {
+      const currentRecord = ensureMealRecordShape(current.meal.records[date]);
+      const nextRecord = ensureMealRecordShape(updater(currentRecord));
+      return {
+        ...current,
+        meal: {
+          ...current.meal,
+          records: {
+            ...current.meal.records,
+            [date]: nextRecord,
+          },
+        },
+      };
     });
   }
 
-  function addReminder(event) {
-    event.preventDefault();
-    if (!reminderForm.title.trim()) return;
-
-    const entry = {
-      id: crypto.randomUUID(),
-      title: reminderForm.title.trim(),
-      dueAt: reminderForm.dueAt,
-      detail: reminderForm.detail.trim(),
-      done: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    setState((current) => ({
-      ...current,
-      reminders: [entry, ...current.reminders],
+  function addFoodToMeal(foodLike, source = "food", setName = "") {
+    const entry = buildMealEntry(foodLike, source, setName);
+    updateMealRecords(selectedMealDate, (record) => ({
+      ...record,
+      [selectedMealKey]: [...record[selectedMealKey], entry],
     }));
-    setReminderForm({
-      title: "",
-      dueAt: nowLocal(),
-      detail: "",
+  }
+
+  function addSetToMeal(mealSet) {
+    const foods = mealSet.foodIds.map((id) => foodsById[id]).filter(Boolean);
+    updateMealRecords(selectedMealDate, (record) => ({
+      ...record,
+      [selectedMealKey]: [
+        ...record[selectedMealKey],
+        ...foods.map((food) => buildMealEntry(food, "set", mealSet.name)),
+      ],
+    }));
+  }
+
+  function addFreeMealEntry(event) {
+    event.preventDefault();
+    if (!freeMealForm.name.trim()) return;
+    addFoodToMeal(
+      {
+        name: freeMealForm.name.trim(),
+        calories: Number(freeMealForm.calories) || 0,
+        protein: Number(freeMealForm.protein) || 0,
+        fat: Number(freeMealForm.fat) || 0,
+        carbs: Number(freeMealForm.carbs) || 0,
+        category: freeMealForm.category,
+      },
+      "free"
+    );
+    setFreeMealForm({
+      name: "",
+      calories: "",
+      protein: "",
+      fat: "",
+      carbs: "",
+      category: "その他",
     });
   }
 
-  function addResistLog(event) {
+  function removeMealEntry(date, mealKey, entryId) {
+    updateMealRecords(date, (record) => ({
+      ...record,
+      [mealKey]: record[mealKey].filter((entry) => entry.entryId !== entryId),
+    }));
+  }
+
+  function handleAddRoutine(event) {
     event.preventDefault();
-    const entry = {
-      id: crypto.randomUUID(),
-      ...resistForm,
-      level: Number(resistForm.level),
-      minutes: Number(resistForm.minutes),
-      memo: resistForm.memo.trim(),
+    if (!routineForm.name.trim()) return;
+
+    const nextRoutine = {
+      id: createId("routine"),
+      name: routineForm.name.trim(),
+      category: routineForm.category,
+      frequencyType: routineForm.frequencyType,
+      interval: routineForm.frequencyType === "毎日" ? 1 : Number(routineForm.interval || 1),
+      startDate: routineForm.startDate,
+      nextDueDate: routineForm.startDate,
+      lastCompletedAt: null,
+      completedForDate: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    setState((current) => ({ ...current, routines: [nextRoutine, ...current.routines] }));
+    setRoutineForm({
+      name: "",
+      category: routineForm.category,
+      frequencyType: routineForm.frequencyType,
+      interval: routineForm.interval,
+      startDate: getTodayDateString(),
+    });
+  }
+
+  function completeRoutine(id) {
+    setState((current) => ({
+      ...current,
+      routines: current.routines.map((routine) => {
+        if (routine.id !== id) return routine;
+        const baseDate = today > routine.nextDueDate ? today : routine.nextDueDate;
+        return {
+          ...routine,
+          lastCompletedAt: today,
+          completedForDate: today,
+          nextDueDate: calculateNextDueDate(baseDate, routine.frequencyType, routine.interval),
+        };
+      }),
+    }));
+  }
+
+  function deleteRoutine(id) {
+    setState((current) => ({
+      ...current,
+      routines: current.routines.filter((routine) => routine.id !== id),
+    }));
+  }
+
+  async function enableNotifications() {
+    if (!notificationSupport.available) return;
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        hasNotifiedThisSession.current = false;
+      }
+    } catch (error) {
+      console.error("Failed to request notification permission:", error);
+    }
+  }
+
+  function addSaveRecord(event) {
+    event.preventDefault();
+    if (!saveRecordForm.itemName.trim()) return;
+    const money = saveRecordForm.entryType === "calorie" ? 0 : Number(saveRecordForm.money) || 0;
+    const calories = saveRecordForm.entryType === "money" ? 0 : Number(saveRecordForm.calories) || 0;
+    if (
+      (saveRecordForm.entryType === "money" && money <= 0) ||
+      (saveRecordForm.entryType === "calorie" && calories <= 0) ||
+      (saveRecordForm.entryType === "both" && (money <= 0 || calories <= 0))
+    ) {
+      return;
+    }
+
+    const nextRecord = {
+      id: createId("save-record"),
+      date: today,
+      entryType: saveRecordForm.entryType,
+      itemName: saveRecordForm.itemName.trim(),
+      money,
+      calories,
+      memo: saveRecordForm.memo.trim(),
       createdAt: new Date().toISOString(),
     };
 
     setState((current) => ({
       ...current,
-      resistLogs: [entry, ...current.resistLogs],
+      save: {
+        ...current.save,
+        records: [nextRecord, ...current.save.records],
+      },
     }));
-    setResistForm({
-      date: today(),
-      type: cravingTypes[0],
-      level: 3,
-      minutes: 10,
+    setSaveRecordForm({
+      itemName: "",
+      entryType: "money",
+      money: "",
+      calories: "",
       memo: "",
     });
+    setSaveHistoryDate(today);
+    setSaveHistoryMonth(new Date());
   }
 
-  function removeItem(collection, id) {
+  function addGoal(event) {
+    event.preventDefault();
+    if (!goalForm.name.trim() || Number(goalForm.target) <= 0) return;
+    const nextGoal = {
+      id: createId("goal"),
+      type: goalForm.type,
+      name: goalForm.name.trim(),
+      target: Number(goalForm.target),
+      priority: goalForm.priority,
+      createdAt: new Date().toISOString(),
+    };
     setState((current) => ({
       ...current,
-      [collection]: current[collection].filter((item) => item.id !== id),
+      save: {
+        ...current.save,
+        goals: [nextGoal, ...current.save.goals],
+      },
+    }));
+    setGoalForm({
+      type: goalForm.type,
+      name: "",
+      target: "",
+      priority: "high",
+    });
+  }
+
+  function deleteGoal(id) {
+    setState((current) => ({
+      ...current,
+      save: {
+        ...current.save,
+        goals: current.save.goals.filter((goal) => goal.id !== id),
+      },
     }));
   }
 
-  function toggleReminder(id) {
+  function deleteSaveRecord(id) {
     setState((current) => ({
       ...current,
-      reminders: current.reminders.map((item) =>
-        item.id === id ? { ...item, done: !item.done } : item
-      ),
+      save: {
+        ...current.save,
+        records: current.save.records.filter((record) => record.id !== id),
+      },
     }));
   }
+
+  function clearSaveRecords() {
+    if (saveRecords.length === 0) return;
+    if (!window.confirm("我慢ログの履歴をすべて削除しますか？")) return;
+    setState((current) => ({
+      ...current,
+      save: {
+        ...current.save,
+        records: [],
+      },
+    }));
+  }
+
+  function renderGoalCard(goal, saved, prefix, unit) {
+    if (!goal) {
+      return {
+        name: "まだ設定されていません",
+        priority: "優先度 -",
+        status: "目標設定画面から追加できます。",
+        progress: 0,
+        saved: `${formatAmount(saved, prefix, unit)} たまりました`,
+        remaining: `残り ${formatAmount(0, prefix, unit)}`,
+      };
+    }
+
+    const progress = Math.min((saved / goal.target) * 100, 100);
+    const remaining = Math.max(goal.target - saved, 0);
+    return {
+      name: goal.name,
+      priority: `優先度 ${priorityLabel(goal.priority)}`,
+      status:
+        progress >= 100
+          ? "目標達成です。ごほうびのタイミングです。"
+          : `${formatAmount(saved, prefix, unit)} / ${formatAmount(goal.target, prefix, unit)} までたまりました。`,
+      progress,
+      saved: `${formatAmount(saved, prefix, unit)} たまりました`,
+      remaining: `残り ${formatAmount(remaining, prefix, unit)}`,
+    };
+  }
+
+  const moneyGoalCard = renderGoalCard(activeMoneyGoal, totalSavedMoney, "¥", "円");
+  const calorieGoalCard = renderGoalCard(activeCalorieGoal, totalSavedCalories, "", "kcal");
 
   return (
     <div className="app-shell">
       <header className="hero">
         <p className="hero__eyebrow">3 APP INTEGRATION</p>
-        <h1>毎日の記録をひとつにまとめる</h1>
+        <h1>3つの最新版をひとつの習慣アプリに統合</h1>
         <p className="hero__copy">
-          食事記録、リマインド、我慢ログを一つの画面で管理できます。
+          `meal-recode-app`、`routine-remind-app`、`save-calorie-money-app` の機能をまとめて、
+          毎日の記録、習慣、我慢の積み上げを一画面で扱えるようにしました。
         </p>
       </header>
 
-      <nav className="tab-bar" aria-label="機能切り替え">
-        {tabs.map((tab) => (
+      <nav className="tab-bar" aria-label="画面切り替え">
+        {[
+          ["home", "ホーム"],
+          ["meals", "食事記録"],
+          ["routines", "リマインド"],
+          ["save", "我慢ログ"],
+        ].map(([id, label]) => (
           <button
-            key={tab.id}
+            key={id}
             type="button"
-            className={tab.id === activeTab ? "tab active" : "tab"}
-            onClick={() => setActiveTab(tab.id)}
+            className={activeTab === id ? "tab active" : "tab"}
+            onClick={() => setActiveTab(id)}
           >
-            {tab.label}
+            {label}
           </button>
         ))}
       </nav>
@@ -238,372 +824,606 @@ function App() {
         {activeTab === "home" && (
           <>
             <section className="panel panel--highlight stats">
-              <div className="stat-card">
-                <span>食事記録</span>
-                <strong>{state.meals.length}</strong>
-                <small>保存済みの記録</small>
+              <article className="stat-card">
+                <span>今日の食事</span>
+                <strong>{todayMealTotals.calories} kcal</strong>
+                <small>P {todayMealTotals.protein} / F {todayMealTotals.fat} / C {todayMealTotals.carbs}</small>
+              </article>
+              <article className="stat-card">
+                <span>今日のリマインド</span>
+                <strong>{pendingTodayRoutines.length} 件</strong>
+                <small>完了済み {completedTodayRoutines.length} 件</small>
+              </article>
+              <article className="stat-card">
+                <span>今日の我慢ログ</span>
+                <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
+                <small>{todaySavedCalories.toLocaleString("ja-JP")} kcal をセーブ</small>
+              </article>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>食事記録の今日</h2>
+                <p>{formatDate(today)}</p>
               </div>
-              <div className="stat-card">
-                <span>未完了リマインド</span>
-                <strong>{upcomingCount}</strong>
-                <small>やることを見逃さない</small>
-              </div>
-              <div className="stat-card">
-                <span>我慢できた時間</span>
-                <strong>{totalResistMinutes}分</strong>
-                <small>積み上げを見える化</small>
+              <div className="summary-stack">
+                {MEAL_KEYS.map((mealKey) => {
+                  const items = todayMealRecord[mealKey];
+                  const totals = sumNutrition(items);
+                  return (
+                    <article key={mealKey} className="mini-card">
+                      <div className="mini-card__head">
+                        <h3>{MEAL_LABELS[mealKey]}</h3>
+                        <span className="pill">{items.length}件</span>
+                      </div>
+                      <p className="meta-row">
+                        {totals.calories}kcal / P {totals.protein} / F {totals.fat} / C {totals.carbs}
+                      </p>
+                    </article>
+                  );
+                })}
               </div>
             </section>
 
             <section className="panel">
               <div className="section-heading">
-                <h2>直近の食事記録</h2>
+                <h2>今日のリマインド</h2>
+                <p>{pendingTodayRoutines.length}件の未完了</p>
               </div>
-              {sortedMeals.slice(0, 3).map((meal) => (
-                <article key={meal.id} className="list-card">
-                  <div>
-                    <p className="list-card__title">
-                      {meal.type} / {meal.title}
-                    </p>
-                    <p className="list-card__meta">{formatDate(meal.date)}</p>
-                  </div>
-                  {meal.note && <p className="list-card__text">{meal.note}</p>}
-                </article>
-              ))}
-              {sortedMeals.length === 0 && (
-                <p className="empty-state">まだ食事記録はありません。</p>
+              {todayRoutines.length === 0 ? (
+                <p className="empty-state">今日は予定されているルーティーンがありません。</p>
+              ) : (
+                <div className="summary-stack">
+                  {todayRoutines.slice(0, 4).map((routine) => (
+                    <article key={routine.id} className={routine.completedForDate === today ? "mini-card is-done" : "mini-card"}>
+                      <div className="mini-card__head">
+                        <h3>{routine.name}</h3>
+                        <span className={routine.completedForDate === today ? "pill success" : "pill"}>
+                          {routine.completedForDate === today ? "完了" : "未完了"}
+                        </span>
+                      </div>
+                      <p className="meta-row">
+                        {routine.category} / {getFrequencyLabel(routine.frequencyType, routine.interval)}
+                      </p>
+                    </article>
+                  ))}
+                </div>
               )}
             </section>
 
             <section className="panel">
               <div className="section-heading">
-                <h2>直近のリマインド</h2>
+                <h2>我慢ログの目標進捗</h2>
               </div>
-              {sortedReminders.slice(0, 3).map((reminder) => (
-                <article key={reminder.id} className="list-card">
-                  <div>
-                    <p className="list-card__title">{reminder.title}</p>
-                    <p className="list-card__meta">
-                      {formatDateTime(reminder.dueAt)}
-                    </p>
+              <div className="goal-stack">
+                <article className="goal-card">
+                  <div className="mini-card__head">
+                    <div>
+                      <p className="goal-eyebrow">欲しいもの</p>
+                      <h3>{moneyGoalCard.name}</h3>
+                    </div>
+                    <span className="pill money">{moneyGoalCard.priority}</span>
                   </div>
-                  <span className={reminder.done ? "badge done" : "badge"}>
-                    {reminder.done ? "完了" : "予定あり"}
-                  </span>
+                  <p className="meta-row">{moneyGoalCard.status}</p>
+                  <div className="progress-track"><div className="progress-fill money-fill" style={{ width: `${moneyGoalCard.progress}%` }} /></div>
+                  <div className="progress-stats">
+                    <span>{moneyGoalCard.saved}</span>
+                    <span>{moneyGoalCard.remaining}</span>
+                  </div>
                 </article>
-              ))}
-              {sortedReminders.length === 0 && (
-                <p className="empty-state">まだリマインドはありません。</p>
-              )}
-            </section>
-
-            <section className="panel">
-              <div className="section-heading">
-                <h2>直近の我慢ログ</h2>
+                <article className="goal-card">
+                  <div className="mini-card__head">
+                    <div>
+                      <p className="goal-eyebrow">食べたいもの</p>
+                      <h3>{calorieGoalCard.name}</h3>
+                    </div>
+                    <span className="pill calorie">{calorieGoalCard.priority}</span>
+                  </div>
+                  <p className="meta-row">{calorieGoalCard.status}</p>
+                  <div className="progress-track"><div className="progress-fill calorie-fill" style={{ width: `${calorieGoalCard.progress}%` }} /></div>
+                  <div className="progress-stats">
+                    <span>{calorieGoalCard.saved}</span>
+                    <span>{calorieGoalCard.remaining}</span>
+                  </div>
+                </article>
               </div>
-              {sortedResistLogs.slice(0, 3).map((log) => (
-                <article key={log.id} className="list-card">
-                  <div>
-                    <p className="list-card__title">{log.type}</p>
-                    <p className="list-card__meta">
-                      {formatDate(log.date)} / 強さ {log.level} / {log.minutes}分
-                    </p>
-                  </div>
-                  {log.memo && <p className="list-card__text">{log.memo}</p>}
-                </article>
-              ))}
-              {sortedResistLogs.length === 0 && (
-                <p className="empty-state">まだ我慢ログはありません。</p>
-              )}
             </section>
           </>
         )}
 
         {activeTab === "meals" && (
           <>
-            <section className="panel">
+            <section className="panel panel--highlight">
               <div className="section-heading">
                 <h2>食事を記録する</h2>
+                <p>{formatDate(selectedMealDate)}</p>
               </div>
-              <form className="form-grid" onSubmit={addMeal}>
+              <div className="form-grid">
                 <label>
-                  <span>日付</span>
-                  <input
-                    type="date"
-                    value={mealForm.date}
-                    onChange={(event) =>
-                      setMealForm({ ...mealForm, date: event.target.value })
-                    }
-                  />
+                  <span>記録日</span>
+                  <input type="date" value={selectedMealDate} onChange={(event) => setSelectedMealDate(event.target.value)} />
                 </label>
                 <label>
-                  <span>区分</span>
-                  <select
-                    value={mealForm.type}
-                    onChange={(event) =>
-                      setMealForm({ ...mealForm, type: event.target.value })
-                    }
-                  >
-                    {mealTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
+                  <span>食事区分</span>
+                  <select value={selectedMealKey} onChange={(event) => setSelectedMealKey(event.target.value)}>
+                    {MEAL_KEYS.map((mealKey) => (
+                      <option key={mealKey} value={mealKey}>
+                        {MEAL_LABELS[mealKey]}
                       </option>
                     ))}
                   </select>
                 </label>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>固定メニュー</h2>
+              </div>
+              <div className="chip-group-block">
+                {groupedFoods.map((group) => (
+                  <div key={group.category} className="chip-section">
+                    <p className="list-label">{group.category}</p>
+                    <div className="chip-grid">
+                      {group.foods.map((food) => (
+                        <FoodChip key={food.id} food={food} onClick={() => addFoodToMeal(food)} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>食事セット</h2>
+              </div>
+              <div className="summary-stack">
+                {state.meal.mealSets.map((mealSet) => (
+                  <MealSetCard key={mealSet.id} mealSet={mealSet} foodsById={foodsById} onAdd={() => addSetToMeal(mealSet)} />
+                ))}
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>自由入力</h2>
+              </div>
+              <form className="form-grid" onSubmit={addFreeMealEntry}>
                 <label className="form-grid__full">
                   <span>内容</span>
-                  <input
-                    type="text"
-                    placeholder="例: 鮭おにぎりと味噌汁"
-                    value={mealForm.title}
-                    onChange={(event) =>
-                      setMealForm({ ...mealForm, title: event.target.value })
-                    }
-                  />
-                </label>
-                <label className="form-grid__full">
-                  <span>メモ</span>
-                  <textarea
-                    rows="3"
-                    placeholder="量や気づきがあれば記録"
-                    value={mealForm.note}
-                    onChange={(event) =>
-                      setMealForm({ ...mealForm, note: event.target.value })
-                    }
-                  />
-                </label>
-                <button className="primary-button form-grid__full" type="submit">
-                  食事記録を追加
-                </button>
-              </form>
-            </section>
-
-            <section className="panel">
-              <div className="section-heading">
-                <h2>記録一覧</h2>
-              </div>
-              {sortedMeals.map((meal) => (
-                <article key={meal.id} className="record-card">
-                  <div className="record-card__body">
-                    <p className="record-card__title">
-                      {meal.type} / {meal.title}
-                    </p>
-                    <p className="record-card__meta">{formatDate(meal.date)}</p>
-                    {meal.note && <p className="record-card__text">{meal.note}</p>}
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => removeItem("meals", meal.id)}
-                  >
-                    削除
-                  </button>
-                </article>
-              ))}
-              {sortedMeals.length === 0 && (
-                <p className="empty-state">食事記録を追加するとここに表示されます。</p>
-              )}
-            </section>
-          </>
-        )}
-
-        {activeTab === "reminders" && (
-          <>
-            <section className="panel">
-              <div className="section-heading">
-                <h2>リマインドを追加する</h2>
-              </div>
-              <form className="form-grid" onSubmit={addReminder}>
-                <label className="form-grid__full">
-                  <span>タイトル</span>
-                  <input
-                    type="text"
-                    placeholder="例: 薬を飲む"
-                    value={reminderForm.title}
-                    onChange={(event) =>
-                      setReminderForm({
-                        ...reminderForm,
-                        title: event.target.value,
-                      })
-                    }
-                  />
+                  <input type="text" value={freeMealForm.name} onChange={(event) => setFreeMealForm({ ...freeMealForm, name: event.target.value })} placeholder="例: バナナヨーグルト" />
                 </label>
                 <label>
-                  <span>日時</span>
-                  <input
-                    type="datetime-local"
-                    value={reminderForm.dueAt}
-                    onChange={(event) =>
-                      setReminderForm({
-                        ...reminderForm,
-                        dueAt: event.target.value,
-                      })
-                    }
-                  />
-                </label>
-                <label className="form-grid__full">
-                  <span>詳細</span>
-                  <textarea
-                    rows="3"
-                    placeholder="補足メモがあれば入力"
-                    value={reminderForm.detail}
-                    onChange={(event) =>
-                      setReminderForm({
-                        ...reminderForm,
-                        detail: event.target.value,
-                      })
-                    }
-                  />
-                </label>
-                <button className="primary-button form-grid__full" type="submit">
-                  リマインドを追加
-                </button>
-              </form>
-            </section>
-
-            <section className="panel">
-              <div className="section-heading">
-                <h2>リマインド一覧</h2>
-              </div>
-              {sortedReminders.map((reminder) => (
-                <article
-                  key={reminder.id}
-                  className={reminder.done ? "record-card is-done" : "record-card"}
-                >
-                  <div className="record-card__body">
-                    <p className="record-card__title">{reminder.title}</p>
-                    <p className="record-card__meta">
-                      {formatDateTime(reminder.dueAt)}
-                    </p>
-                    {reminder.detail && (
-                      <p className="record-card__text">{reminder.detail}</p>
-                    )}
-                  </div>
-                  <div className="record-card__actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => toggleReminder(reminder.id)}
-                    >
-                      {reminder.done ? "未完了に戻す" : "完了にする"}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => removeItem("reminders", reminder.id)}
-                    >
-                      削除
-                    </button>
-                  </div>
-                </article>
-              ))}
-              {sortedReminders.length === 0 && (
-                <p className="empty-state">リマインドを追加するとここに表示されます。</p>
-              )}
-            </section>
-          </>
-        )}
-
-        {activeTab === "resist" && (
-          <>
-            <section className="panel">
-              <div className="section-heading">
-                <h2>我慢ログを追加する</h2>
-              </div>
-              <form className="form-grid" onSubmit={addResistLog}>
-                <label>
-                  <span>日付</span>
-                  <input
-                    type="date"
-                    value={resistForm.date}
-                    onChange={(event) =>
-                      setResistForm({ ...resistForm, date: event.target.value })
-                    }
-                  />
+                  <span>カロリー</span>
+                  <input type="number" min="0" value={freeMealForm.calories} onChange={(event) => setFreeMealForm({ ...freeMealForm, calories: event.target.value })} />
                 </label>
                 <label>
-                  <span>種類</span>
-                  <select
-                    value={resistForm.type}
-                    onChange={(event) =>
-                      setResistForm({ ...resistForm, type: event.target.value })
-                    }
-                  >
-                    {cravingTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
+                  <span>カテゴリ</span>
+                  <select value={freeMealForm.category} onChange={(event) => setFreeMealForm({ ...freeMealForm, category: event.target.value })}>
+                    {CATEGORY_OPTIONS.map((category) => (
+                      <option key={category} value={category}>{category}</option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  <span>衝動の強さ</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="5"
-                    value={resistForm.level}
-                    onChange={(event) =>
-                      setResistForm({ ...resistForm, level: event.target.value })
-                    }
-                  />
-                  <small>{resistForm.level} / 5</small>
+                  <span>たんぱく質</span>
+                  <input type="number" min="0" value={freeMealForm.protein} onChange={(event) => setFreeMealForm({ ...freeMealForm, protein: event.target.value })} />
                 </label>
                 <label>
-                  <span>我慢できた時間</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="5"
-                    value={resistForm.minutes}
-                    onChange={(event) =>
-                      setResistForm({ ...resistForm, minutes: event.target.value })
-                    }
-                  />
+                  <span>脂質</span>
+                  <input type="number" min="0" value={freeMealForm.fat} onChange={(event) => setFreeMealForm({ ...freeMealForm, fat: event.target.value })} />
                 </label>
                 <label className="form-grid__full">
-                  <span>メモ</span>
-                  <textarea
-                    rows="3"
-                    placeholder="どんな状況だったか記録"
-                    value={resistForm.memo}
-                    onChange={(event) =>
-                      setResistForm({ ...resistForm, memo: event.target.value })
-                    }
-                  />
+                  <span>炭水化物</span>
+                  <input type="number" min="0" value={freeMealForm.carbs} onChange={(event) => setFreeMealForm({ ...freeMealForm, carbs: event.target.value })} />
                 </label>
-                <button className="primary-button form-grid__full" type="submit">
-                  我慢ログを追加
+                <button className="primary-button form-grid__full" type="submit">自由入力で追加</button>
+              </form>
+            </section>
+
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>{formatDate(selectedMealDate)} の記録</h2>
+              </div>
+              <div className="summary-stack">
+                {MEAL_KEYS.map((mealKey) => {
+                  const items = mealRecord[mealKey];
+                  const totals = sumNutrition(items);
+                  const pfc = calculatePfcPercentages(totals);
+                  return (
+                    <article key={mealKey} className="goal-card">
+                      <div className="mini-card__head">
+                        <h3>{MEAL_LABELS[mealKey]}</h3>
+                        <span className="pill">{items.length}件</span>
+                      </div>
+                      <p className="meta-row">
+                        {totals.calories}kcal / P {totals.protein}g / F {totals.fat}g / C {totals.carbs}g
+                      </p>
+                      <div className="pfc-bar">
+                        <div className="pfc-segment protein" style={{ width: `${pfc.protein}%` }} />
+                        <div className="pfc-segment fat" style={{ width: `${pfc.fat}%` }} />
+                        <div className="pfc-segment carbs" style={{ width: `${pfc.carbs}%` }} />
+                      </div>
+                      <div className="record-list">
+                        {items.length === 0 && <p className="empty-state">まだ記録がありません。</p>}
+                        {items.map((entry) => (
+                          <article key={entry.entryId} className="record-card">
+                            <div className="record-card__body">
+                              <p className="record-card__title">{entry.name}</p>
+                              <p className="record-card__meta">
+                                {entry.calories}kcal / P{entry.protein} F{entry.fat} C{entry.carbs}
+                              </p>
+                              {entry.setName && <p className="record-card__text">{entry.setName} から追加</p>}
+                            </div>
+                            <button type="button" className="ghost-button" onClick={() => removeMealEntry(selectedMealDate, mealKey, entry.entryId)}>削除</button>
+                          </article>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>履歴カレンダー</h2>
+                <div className="month-switch">
+                  <button className="secondary-button" type="button" onClick={() => setMealHistoryMonth(new Date(mealHistoryMonth.getFullYear(), mealHistoryMonth.getMonth() - 1, 1))}>前月</button>
+                  <p>{formatMonthLabel(mealHistoryMonth)}</p>
+                  <button className="secondary-button" type="button" onClick={() => setMealHistoryMonth(new Date(mealHistoryMonth.getFullYear(), mealHistoryMonth.getMonth() + 1, 1))}>次月</button>
+                </div>
+              </div>
+              <div className="calendar-grid">
+                {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
+                  <span key={day} className="weekday">{day}</span>
+                ))}
+                {mealCalendarDays.map((date, index) => {
+                  if (!date) return <div key={`blank-${index}`} className="calendar-day is-empty" />;
+                  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                  const entry = mealHistoryByDate[dateKey];
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      className={mealHistoryDate === dateKey ? "calendar-day is-selected" : "calendar-day"}
+                      onClick={() => setMealHistoryDate(dateKey)}
+                    >
+                      <span>{date.getDate()}</span>
+                      <small>{entry ? `${entry.totals.calories}kcal` : "-"}</small>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="history-detail">
+                <h3>{formatDate(mealHistoryDate)} の食事</h3>
+                {!selectedMealHistoryEntry && <p className="empty-state">この日の記録はありません。</p>}
+                {selectedMealHistoryEntry && (
+                  <div className="summary-stack">
+                    {MEAL_KEYS.map((mealKey) => {
+                      const items = selectedMealHistoryEntry.meals[mealKey];
+                      if (items.length === 0) return null;
+                      return (
+                        <article key={mealKey} className="mini-card">
+                          <div className="mini-card__head">
+                            <h3>{MEAL_LABELS[mealKey]}</h3>
+                            <span className="pill">{items.length}件</span>
+                          </div>
+                          <p className="meta-row">{items.map((item) => item.name).join(" / ")}</p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeTab === "routines" && (
+          <>
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>通知と今日の予定</h2>
+              </div>
+              <div className="notification-banner">
+                <div>
+                  <p className="goal-eyebrow">通知</p>
+                  <h3>{notificationPermission === "granted" ? "通知はオンです" : "今日のリマインドを通知"}</h3>
+                  <p className="meta-row">
+                    {notificationSupport.available
+                      ? "アプリを開いた時に、今日の未完了リマインドを通知します。"
+                      : notificationSupport.reason}
+                  </p>
+                </div>
+                <button className="primary-button" type="button" onClick={enableNotifications} disabled={!notificationSupport.available || notificationPermission === "granted"}>
+                  {notificationPermission === "granted" ? "通知を許可済み" : "通知を許可する"}
                 </button>
+              </div>
+              <div className="summary-stack two-cols">
+                <article className="goal-card">
+                  <div className="section-heading">
+                    <h3>未完了</h3>
+                    <p>{pendingTodayRoutines.length}件</p>
+                  </div>
+                  {pendingTodayRoutines.length === 0 && <p className="empty-state">今日の未完了タスクはありません。</p>}
+                  {pendingTodayRoutines.map((routine) => (
+                    <label key={routine.id} className="check-item">
+                      <input type="checkbox" checked={false} onChange={() => completeRoutine(routine.id)} />
+                      <span className="check-copy">
+                        <span className="record-card__title">{routine.name}</span>
+                        <span className="record-card__meta">
+                          {routine.category} / {getFrequencyLabel(routine.frequencyType, routine.interval)}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </article>
+                <article className="goal-card">
+                  <div className="section-heading">
+                    <h3>完了済み</h3>
+                    <p>{completedTodayRoutines.length}件</p>
+                  </div>
+                  {completedTodayRoutines.length === 0 && <p className="empty-state">完了済みはまだありません。</p>}
+                  {completedTodayRoutines.map((routine) => (
+                    <label key={routine.id} className="check-item is-checked">
+                      <input type="checkbox" checked readOnly />
+                      <span className="check-copy">
+                        <span className="record-card__title">{routine.name}</span>
+                        <span className="record-card__meta">
+                          次回予定日: {formatDate(routine.nextDueDate)}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </article>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>ルーティーン追加</h2>
+              </div>
+              <form className="form-grid" onSubmit={handleAddRoutine}>
+                <label className="form-grid__full">
+                  <span>ルーティーン名</span>
+                  <input type="text" value={routineForm.name} onChange={(event) => setRoutineForm({ ...routineForm, name: event.target.value })} placeholder="例: 朝のサプリ、洗面台の掃除" />
+                </label>
+                <label>
+                  <span>カテゴリ</span>
+                  <select value={routineForm.category} onChange={(event) => setRoutineForm({ ...routineForm, category: event.target.value })}>
+                    {ROUTINE_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>頻度</span>
+                  <select value={routineForm.frequencyType} onChange={(event) => setRoutineForm({ ...routineForm, frequencyType: event.target.value })}>
+                    {FREQUENCY_TYPES.map((type) => (
+                      <option key={type} value={type}>{type === "毎日" ? "毎日" : `○${type}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>間隔</span>
+                  <input type="number" min="1" value={routineForm.interval} disabled={routineForm.frequencyType === "毎日"} onChange={(event) => setRoutineForm({ ...routineForm, interval: Number(event.target.value) })} />
+                </label>
+                <label>
+                  <span>開始日</span>
+                  <input type="date" value={routineForm.startDate} onChange={(event) => setRoutineForm({ ...routineForm, startDate: event.target.value })} />
+                </label>
+                <button className="primary-button form-grid__full" type="submit">ルーティーンを追加</button>
+              </form>
+            </section>
+
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>登録済みルーティーン</h2>
+              </div>
+              <div className="record-list">
+                {state.routines.length === 0 && <p className="empty-state">まだルーティーンがありません。</p>}
+                {[...state.routines]
+                  .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate))
+                  .map((routine) => (
+                    <article key={routine.id} className="record-card">
+                      <div className="record-card__body">
+                        <p className="record-card__title">{routine.name}</p>
+                        <p className="record-card__meta">
+                          {routine.category} / {getFrequencyLabel(routine.frequencyType, routine.interval)}
+                        </p>
+                        <p className="record-card__text">次回予定日: {formatDate(routine.nextDueDate)}</p>
+                      </div>
+                      <div className="action-stack">
+                        <button type="button" className="secondary-button" onClick={() => completeRoutine(routine.id)}>完了</button>
+                        <button type="button" className="ghost-button" onClick={() => deleteRoutine(routine.id)}>削除</button>
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeTab === "save" && (
+          <>
+            <section className="panel panel--highlight stats">
+              <article className="stat-card">
+                <span>今日のセーブ金額</span>
+                <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
+                <small>累計 ¥{totalSavedMoney.toLocaleString("ja-JP")}</small>
+              </article>
+              <article className="stat-card">
+                <span>今日のセーブカロリー</span>
+                <strong>{todaySavedCalories.toLocaleString("ja-JP")} kcal</strong>
+                <small>累計 {totalSavedCalories.toLocaleString("ja-JP")} kcal</small>
+              </article>
+              <article className="stat-card">
+                <span>記録件数</span>
+                <strong>{saveRecords.length} 件</strong>
+                <small>毎日の我慢を見える化</small>
+              </article>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>我慢ログを記録する</h2>
+              </div>
+              <form className="form-grid" onSubmit={addSaveRecord}>
+                <label className="form-grid__full">
+                  <span>我慢したもの</span>
+                  <input type="text" value={saveRecordForm.itemName} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, itemName: event.target.value })} placeholder="例: コンビニスイーツ" />
+                </label>
+                <label className="form-grid__full">
+                  <span>入力タイプ</span>
+                  <select value={saveRecordForm.entryType} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, entryType: event.target.value, money: "", calories: "" })}>
+                    <option value="money">お金だけ</option>
+                    <option value="calorie">カロリーだけ</option>
+                    <option value="both">お金＋カロリー</option>
+                  </select>
+                </label>
+                {saveRecordForm.entryType !== "calorie" && (
+                  <label>
+                    <span>セーブ金額</span>
+                    <input type="number" min="0" value={saveRecordForm.money} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, money: event.target.value })} />
+                  </label>
+                )}
+                {saveRecordForm.entryType !== "money" && (
+                  <label>
+                    <span>セーブカロリー</span>
+                    <input type="number" min="0" value={saveRecordForm.calories} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, calories: event.target.value })} />
+                  </label>
+                )}
+                <label className="form-grid__full">
+                  <span>メモ</span>
+                  <textarea rows="3" value={saveRecordForm.memo} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, memo: event.target.value })} placeholder="例: 仕事帰りに買わずに帰れた" />
+                </label>
+                <button className="primary-button form-grid__full" type="submit">保存する</button>
               </form>
             </section>
 
             <section className="panel">
               <div className="section-heading">
-                <h2>ログ一覧</h2>
+                <h2>目標を追加する</h2>
               </div>
-              {sortedResistLogs.map((log) => (
-                <article key={log.id} className="record-card">
-                  <div className="record-card__body">
-                    <p className="record-card__title">{log.type}</p>
-                    <p className="record-card__meta">
-                      {formatDate(log.date)} / 強さ {log.level} / {log.minutes}分
-                    </p>
-                    {log.memo && <p className="record-card__text">{log.memo}</p>}
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => removeItem("resistLogs", log.id)}
-                  >
-                    削除
-                  </button>
-                </article>
-              ))}
-              {sortedResistLogs.length === 0 && (
-                <p className="empty-state">我慢ログを追加するとここに表示されます。</p>
-              )}
+              <form className="form-grid" onSubmit={addGoal}>
+                <label>
+                  <span>目標タイプ</span>
+                  <select value={goalForm.type} onChange={(event) => setGoalForm({ ...goalForm, type: event.target.value })}>
+                    <option value="money">欲しいもの</option>
+                    <option value="calorie">食べたいもの</option>
+                  </select>
+                </label>
+                <label>
+                  <span>優先度</span>
+                  <select value={goalForm.priority} onChange={(event) => setGoalForm({ ...goalForm, priority: event.target.value })}>
+                    <option value="high">高</option>
+                    <option value="medium">中</option>
+                    <option value="low">低</option>
+                  </select>
+                </label>
+                <label className="form-grid__full">
+                  <span>目標名</span>
+                  <input type="text" value={goalForm.name} onChange={(event) => setGoalForm({ ...goalForm, name: event.target.value })} placeholder={goalForm.type === "money" ? "例: 新しいイヤホン" : "例: チートデイのラーメン"} />
+                </label>
+                <label className="form-grid__full">
+                  <span>目標値</span>
+                  <input type="number" min="1" value={goalForm.target} onChange={(event) => setGoalForm({ ...goalForm, target: event.target.value })} placeholder={goalForm.type === "money" ? "12000" : "1800"} />
+                </label>
+                <button className="primary-button form-grid__full" type="submit">目標を追加する</button>
+              </form>
+            </section>
+
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>目標一覧</h2>
+              </div>
+              <div className="goal-list-wrap">
+                {["money", "calorie"].map((type) => {
+                  const goals = sortedGoals.filter((goal) => goal.type === type);
+                  return (
+                    <div key={type}>
+                      <p className="list-label">{type === "money" ? "欲しいもの" : "食べたいもの"}</p>
+                      <div className="summary-stack">
+                        {goals.length === 0 && <p className="empty-state">まだ目標がありません。</p>}
+                        {goals.map((goal) => (
+                          <article key={goal.id} className="mini-card">
+                            <div className="mini-card__head">
+                              <div>
+                                <h3>{goal.name}</h3>
+                                <p className="meta-row">
+                                  {type === "money" ? `¥${goal.target.toLocaleString("ja-JP")}` : `${goal.target.toLocaleString("ja-JP")} kcal`}
+                                </p>
+                              </div>
+                              <button className="ghost-button" type="button" onClick={() => deleteGoal(goal.id)}>削除</button>
+                            </div>
+                            <p className="meta-row">優先度 {priorityLabel(goal.priority)}</p>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="panel panel--highlight">
+              <div className="section-heading">
+                <h2>履歴カレンダー</h2>
+                <div className="month-switch">
+                  <button className="secondary-button" type="button" onClick={() => setSaveHistoryMonth(new Date(saveHistoryMonth.getFullYear(), saveHistoryMonth.getMonth() - 1, 1))}>前月</button>
+                  <p>{formatMonthLabel(saveHistoryMonth)}</p>
+                  <button className="secondary-button" type="button" onClick={() => setSaveHistoryMonth(new Date(saveHistoryMonth.getFullYear(), saveHistoryMonth.getMonth() + 1, 1))}>次月</button>
+                </div>
+              </div>
+              <div className="calendar-grid">
+                {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
+                  <span key={day} className="weekday">{day}</span>
+                ))}
+                {saveCalendarDays.map((date, index) => {
+                  if (!date) return <div key={`blank-${index}`} className="calendar-day is-empty" />;
+                  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                  const dayRecords = saveRecordsByDate[dateKey] || [];
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      className={saveHistoryDate === dateKey ? "calendar-day is-selected" : "calendar-day"}
+                      onClick={() => setSaveHistoryDate(dateKey)}
+                    >
+                      <span>{date.getDate()}</span>
+                      <small>
+                        {dayRecords.length > 0
+                          ? `¥${sumMoney(dayRecords).toLocaleString("ja-JP")} / ${sumCalories(dayRecords).toLocaleString("ja-JP")}k`
+                          : "-"}
+                      </small>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="section-heading">
+                <h3>{formatDate(saveHistoryDate)} の記録</h3>
+                <button className="ghost-button" type="button" onClick={clearSaveRecords}>履歴を全削除</button>
+              </div>
+              <div className="record-list">
+                {saveHistoryRecords.length === 0 && <p className="empty-state">この日の記録はありません。</p>}
+                {saveHistoryRecords.map((record) => (
+                  <article key={record.id} className="record-card">
+                    <div className="record-card__body">
+                      <p className="record-card__title">{record.itemName}</p>
+                      <p className="record-card__meta">{record.date}</p>
+                      <p className="record-card__text">
+                        {record.money > 0 && `¥${record.money.toLocaleString("ja-JP")}`}
+                        {record.money > 0 && record.calories > 0 && " / "}
+                        {record.calories > 0 && `${record.calories.toLocaleString("ja-JP")} kcal`}
+                      </p>
+                      {record.memo && <p className="record-card__text">{record.memo}</p>}
+                    </div>
+                    <button type="button" className="ghost-button" onClick={() => deleteSaveRecord(record.id)}>削除</button>
+                  </article>
+                ))}
+              </div>
             </section>
           </>
         )}
