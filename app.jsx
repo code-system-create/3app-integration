@@ -1244,7 +1244,7 @@ function App() {
               </div>
               <div className="chip-group-block">
                 <div className="chip-section">
-                  <p className="list-label">食事セットをワンタップで記録</p>
+                  <p className="list-label">食事セット</p>
                   <div className="chip-grid">
                     {state.meal.mealSets.map((mealSet) => (
                       <button
@@ -1261,7 +1261,7 @@ function App() {
                 </div>
                 {groupedFoods.map((group) => (
                   <div key={group.category} className="chip-section">
-                    <p className="list-label">{group.category} をワンタップで記録</p>
+                    <p className="list-label">{group.category}</p>
                     <div className="chip-grid">
                       {group.foods.map((food) => (
                         <FoodChip key={food.id} food={food} onClick={() => addFoodToMeal(food)} />
@@ -1275,7 +1275,6 @@ function App() {
             <section className="panel">
               <div className="section-heading">
                 <h2>追加セクション</h2>
-                <p>必要なときだけ展開</p>
               </div>
               <div className="inline-actions manage-toggle-row">
                 <button
@@ -1401,7 +1400,6 @@ function App() {
             <section className="panel panel--highlight">
               <div className="section-heading">
                 <h2>{formatDate(selectedMealDate)} の記録</h2>
-                <p>タップで詳細を展開</p>
               </div>
               <div className="summary-stack">
                 {MEAL_KEYS.map((mealKey) => {
@@ -1481,7 +1479,6 @@ function App() {
             <section className="panel panel--highlight">
               <div className="section-heading">
                 <h2>一覧管理</h2>
-                <p>必要なときだけ展開</p>
               </div>
               <div className="inline-actions manage-toggle-row">
                 <button
