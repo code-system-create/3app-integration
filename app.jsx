@@ -383,6 +383,7 @@ function MealSetCard({ mealSet, foodsById, onAdd }) {
 function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [state, setState] = useState(loadState);
+  const [toast, setToast] = useState("");
   const [selectedMealDate, setSelectedMealDate] = useState(getTodayDateString());
   const [selectedMealKey, setSelectedMealKey] = useState("breakfast");
   const [mealHistoryMonth, setMealHistoryMonth] = useState(() => {
@@ -431,6 +432,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const foodsById = useMemo(
     () => Object.fromEntries(state.meal.foods.map((food) => [food.id, food])),
@@ -548,12 +555,17 @@ function App() {
     });
   }
 
+  function showToast(message) {
+    setToast(message);
+  }
+
   function addFoodToMeal(foodLike, source = "food", setName = "") {
     const entry = buildMealEntry(foodLike, source, setName);
     updateMealRecords(selectedMealDate, (record) => ({
       ...record,
       [selectedMealKey]: [...record[selectedMealKey], entry],
     }));
+    showToast("記録しました");
   }
 
   function addSetToMeal(mealSet) {
@@ -565,6 +577,7 @@ function App() {
         ...foods.map((food) => buildMealEntry(food, "set", mealSet.name)),
       ],
     }));
+    showToast("追加しました");
   }
 
   function addFreeMealEntry(event) {
@@ -589,6 +602,7 @@ function App() {
       carbs: "",
       category: "その他",
     });
+    showToast("記録しました");
   }
 
   function removeMealEntry(date, mealKey, entryId) {
@@ -596,6 +610,7 @@ function App() {
       ...record,
       [mealKey]: record[mealKey].filter((entry) => entry.entryId !== entryId),
     }));
+    showToast("削除しました");
   }
 
   function handleAddRoutine(event) {
@@ -623,6 +638,7 @@ function App() {
       interval: routineForm.interval,
       startDate: getTodayDateString(),
     });
+    showToast("追加しました");
   }
 
   function completeRoutine(id) {
@@ -639,6 +655,7 @@ function App() {
         };
       }),
     }));
+    showToast("完了しました");
   }
 
   function deleteRoutine(id) {
@@ -646,6 +663,7 @@ function App() {
       ...current,
       routines: current.routines.filter((routine) => routine.id !== id),
     }));
+    showToast("削除しました");
   }
 
   async function enableNotifications() {
@@ -655,6 +673,7 @@ function App() {
       setNotificationPermission(permission);
       if (permission === "granted") {
         hasNotifiedThisSession.current = false;
+        showToast("通知を許可しました");
       }
     } catch (error) {
       console.error("Failed to request notification permission:", error);
@@ -701,6 +720,7 @@ function App() {
     });
     setSaveHistoryDate(today);
     setSaveHistoryMonth(new Date());
+    showToast("記録しました");
   }
 
   function addGoal(event) {
@@ -727,6 +747,7 @@ function App() {
       target: "",
       priority: "high",
     });
+    showToast("追加しました");
   }
 
   function deleteGoal(id) {
@@ -737,6 +758,7 @@ function App() {
         goals: current.save.goals.filter((goal) => goal.id !== id),
       },
     }));
+    showToast("削除しました");
   }
 
   function deleteSaveRecord(id) {
@@ -747,6 +769,7 @@ function App() {
         records: current.save.records.filter((record) => record.id !== id),
       },
     }));
+    showToast("削除しました");
   }
 
   function clearSaveRecords() {
@@ -759,6 +782,7 @@ function App() {
         records: [],
       },
     }));
+    showToast("履歴を削除しました");
   }
 
   function renderGoalCard(goal, saved, prefix, unit) {
@@ -793,15 +817,6 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="hero">
-        <p className="hero__eyebrow">3 APP INTEGRATION</p>
-        <h1>3つの最新版をひとつの習慣アプリに統合</h1>
-        <p className="hero__copy">
-          `meal-recode-app`、`routine-remind-app`、`save-calorie-money-app` の機能をまとめて、
-          毎日の記録、習慣、我慢の積み上げを一画面で扱えるようにしました。
-        </p>
-      </header>
-
       <nav className="tab-bar" aria-label="画面切り替え">
         {[
           ["home", "ホーム"],
@@ -1249,17 +1264,17 @@ function App() {
         {activeTab === "save" && (
           <>
             <section className="panel panel--highlight stats">
-              <article className="stat-card">
+              <article className="stat-card stat-card--compact">
                 <span>今日のセーブ金額</span>
                 <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
                 <small>累計 ¥{totalSavedMoney.toLocaleString("ja-JP")}</small>
               </article>
-              <article className="stat-card">
+              <article className="stat-card stat-card--compact">
                 <span>今日のセーブカロリー</span>
                 <strong>{todaySavedCalories.toLocaleString("ja-JP")} kcal</strong>
                 <small>累計 {totalSavedCalories.toLocaleString("ja-JP")} kcal</small>
               </article>
-              <article className="stat-card">
+              <article className="stat-card stat-card--compact">
                 <span>記録件数</span>
                 <strong>{saveRecords.length} 件</strong>
                 <small>毎日の我慢を見える化</small>
@@ -1428,6 +1443,7 @@ function App() {
           </>
         )}
       </main>
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
