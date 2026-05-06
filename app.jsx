@@ -885,11 +885,29 @@ function App() {
           ...routine,
           lastCompletedAt: today,
           completedForDate: today,
+          previousNextDueDate: routine.nextDueDate,
           nextDueDate: calculateNextDueDate(baseDate, routine.frequencyType, routine.interval),
         };
       }),
     }));
     showToast("完了しました");
+  }
+
+  function uncompleteRoutine(id) {
+    setState((current) => ({
+      ...current,
+      routines: current.routines.map((routine) => {
+        if (routine.id !== id) return routine;
+        return {
+          ...routine,
+          lastCompletedAt: null,
+          completedForDate: null,
+          nextDueDate: routine.previousNextDueDate || routine.startDate,
+          previousNextDueDate: null,
+        };
+      }),
+    }));
+    showToast("未完了に戻しました");
   }
 
   function deleteRoutine(id) {
@@ -1507,21 +1525,7 @@ function App() {
           <>
             <section className="panel panel--highlight">
               <div className="section-heading">
-                <h2>通知と今日の予定</h2>
-              </div>
-              <div className="notification-banner">
-                <div>
-                  <p className="goal-eyebrow">通知</p>
-                  <h3>{notificationPermission === "granted" ? "通知はオンです" : "今日のリマインドを通知"}</h3>
-                  <p className="meta-row">
-                    {notificationSupport.available
-                      ? "アプリを開いた時に、今日の未完了リマインドを通知します。"
-                      : notificationSupport.reason}
-                  </p>
-                </div>
-                <button className="primary-button" type="button" onClick={enableNotifications} disabled={!notificationSupport.available || notificationPermission === "granted"}>
-                  {notificationPermission === "granted" ? "通知を許可済み" : "通知を許可する"}
-                </button>
+                <h2>今日の予定</h2>
               </div>
               <div className="summary-stack two-cols">
                 <article className="goal-card">
@@ -1550,7 +1554,7 @@ function App() {
                   {completedTodayRoutines.length === 0 && <p className="empty-state">完了済みはまだありません。</p>}
                   {completedTodayRoutines.map((routine) => (
                     <label key={routine.id} className="check-item is-checked">
-                      <input type="checkbox" checked readOnly />
+                      <input type="checkbox" checked onChange={() => uncompleteRoutine(routine.id)} />
                       <span className="check-copy">
                         <span className="record-card__title">{routine.name}</span>
                         <span className="record-card__meta">
@@ -1618,7 +1622,17 @@ function App() {
                         <p className="record-card__text">次回予定日: {formatDate(routine.nextDueDate)}</p>
                       </div>
                       <div className="action-stack">
-                        <button type="button" className="secondary-button" onClick={() => completeRoutine(routine.id)}>完了</button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() =>
+                            routine.completedForDate === today
+                              ? uncompleteRoutine(routine.id)
+                              : completeRoutine(routine.id)
+                          }
+                        >
+                          {routine.completedForDate === today ? "未完了に戻す" : "完了"}
+                        </button>
                         <button type="button" className="ghost-button" onClick={() => deleteRoutine(routine.id)}>削除</button>
                       </div>
                     </article>

@@ -520,14 +520,6 @@ textarea {
   transform: rotate(180deg);
 }
 
-.notification-banner {
-  padding: 18px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.64);
-  border: 1px solid var(--line);
-  margin-bottom: 18px;
-}
-
 .toast {
   position: fixed;
   left: 50%;
@@ -548,6 +540,14 @@ textarea {
   gap: 12px;
   padding: 14px 0;
   border-top: 1px solid var(--line);
+}
+
+.check-item input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--secondary);
+  flex: 0 0 auto;
 }
 
 .check-item:first-of-type {
@@ -587,7 +587,6 @@ textarea {
   .section-heading,
   .mini-card__head,
   .month-switch,
-  .notification-banner,
   .progress-stats,
   .accordion-toggle {
     flex-direction: column;
