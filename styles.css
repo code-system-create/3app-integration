@@ -1,25 +1,25 @@
 :root {
-  --bg: #f6efe6;
-  --surface: rgba(255, 251, 246, 0.88);
-  --surface-strong: #fffaf4;
-  --line: rgba(90, 70, 55, 0.12);
-  --text: #2f2621;
-  --muted: #6f6258;
-  --primary: #c7683c;
-  --primary-deep: #914123;
-  --secondary: #23504a;
-  --money: #2f7d57;
-  --calorie: #d97b37;
-  --protein: #6f7be8;
-  --fat: #e58c7a;
-  --carbs: #74b26f;
-  --shadow: 0 20px 44px rgba(78, 55, 39, 0.12);
-  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+  --bg: #f2eee7;
+  --surface: rgba(255, 252, 248, 0.84);
+  --surface-strong: #fffdf9;
+  --line: rgba(66, 76, 92, 0.12);
+  --text: #233040;
+  --muted: #6d7785;
+  --primary: #355c66;
+  --primary-deep: #1f3942;
+  --secondary: #7b8c97;
+  --money: #3f6b62;
+  --calorie: #b07a54;
+  --protein: #4c6f8f;
+  --fat: #c4907b;
+  --carbs: #8ba07a;
+  --shadow: 0 18px 44px rgba(77, 64, 48, 0.1);
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(199, 104, 60, 0.18), transparent 22%),
-    radial-gradient(circle at top right, rgba(35, 80, 74, 0.14), transparent 24%),
-    linear-gradient(180deg, #fdf6ee 0%, var(--bg) 100%);
+    radial-gradient(circle at top left, rgba(210, 223, 227, 0.55), transparent 26%),
+    radial-gradient(circle at top right, rgba(228, 208, 188, 0.38), transparent 30%),
+    linear-gradient(180deg, #faf7f2 0%, var(--bg) 100%);
 }
 
 * {
@@ -55,7 +55,7 @@ button {
 .panel {
   border-radius: 28px;
   background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.58);
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
 }
@@ -93,12 +93,12 @@ button {
   color: var(--muted);
   font-weight: 700;
   font-size: 0.95rem;
-  box-shadow: inset 0 0 0 1px rgba(90, 70, 55, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(66, 76, 92, 0.08);
 }
 
 .tab.active {
-  background: var(--secondary);
-  color: #f7f2eb;
+  background: var(--primary);
+  color: #f9f6f1;
 }
 
 .content-grid {
@@ -236,10 +236,10 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid rgba(90, 70, 55, 0.14);
+  border: 1px solid rgba(66, 76, 92, 0.1);
   border-radius: 16px;
   padding: 14px 15px;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--text);
 }
 
@@ -257,18 +257,18 @@ textarea {
 }
 
 .primary-button {
-  background: var(--primary);
-  color: #fff7f2;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
+  color: #f9f6f1;
 }
 
 .secondary-button {
-  background: rgba(35, 80, 74, 0.12);
+  background: rgba(83, 108, 120, 0.12);
   color: var(--secondary);
 }
 
 .ghost-button {
-  background: rgba(199, 104, 60, 0.1);
-  color: var(--primary-deep);
+  background: rgba(83, 108, 120, 0.08);
+  color: var(--primary);
 }
 
 .chip-group-block,
@@ -289,7 +289,7 @@ textarea {
   padding: 14px;
   text-align: left;
   background: rgba(255, 255, 255, 0.78);
-  box-shadow: inset 0 0 0 1px rgba(90, 70, 55, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(66, 76, 92, 0.08);
 }
 
 .chip-button span,
@@ -308,7 +308,7 @@ textarea {
   justify-content: center;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(35, 80, 74, 0.1);
+  background: rgba(83, 108, 120, 0.1);
   color: var(--secondary);
   font-size: 0.82rem;
   font-weight: 700;
@@ -316,16 +316,16 @@ textarea {
 
 .pill.success,
 .money-fill {
-  background: rgba(47, 125, 87, 0.16);
+  background: rgba(63, 107, 98, 0.16);
 }
 
 .pill.money {
-  background: rgba(47, 125, 87, 0.14);
+  background: rgba(63, 107, 98, 0.12);
   color: var(--money);
 }
 
 .pill.calorie {
-  background: rgba(217, 123, 55, 0.16);
+  background: rgba(176, 122, 84, 0.12);
   color: var(--calorie);
 }
 
@@ -413,7 +413,7 @@ textarea {
   margin: 12px 0 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(90, 70, 55, 0.1);
+  background: rgba(83, 108, 120, 0.1);
 }
 
 .progress-fill {
@@ -422,11 +422,11 @@ textarea {
 }
 
 .money-fill {
-  background: linear-gradient(90deg, #5aa77b, #2f7d57);
+  background: linear-gradient(90deg, #7ea095, #3f6b62);
 }
 
 .calorie-fill {
-  background: linear-gradient(90deg, #f0aa65, #d97b37);
+  background: linear-gradient(90deg, #d0aa8f, #b07a54);
 }
 
 .goal-list-wrap {
@@ -464,8 +464,8 @@ textarea {
 }
 
 .calendar-day.is-selected {
-  border-color: rgba(35, 80, 74, 0.45);
-  background: rgba(225, 239, 236, 0.9);
+  border-color: rgba(53, 92, 102, 0.3);
+  background: rgba(224, 235, 238, 0.92);
 }
 
 .calendar-day.is-empty {
@@ -482,7 +482,7 @@ textarea {
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(90, 70, 55, 0.08);
+  background: rgba(83, 108, 120, 0.08);
   margin: 12px 0;
 }
 
@@ -527,7 +527,7 @@ textarea {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: rgba(35, 80, 74, 0.1);
+  background: rgba(83, 108, 120, 0.1);
   color: var(--secondary);
   transition: transform 180ms ease;
 }
@@ -544,10 +544,10 @@ textarea {
   z-index: 20;
   padding: 12px 18px;
   border-radius: 999px;
-  background: rgba(47, 38, 33, 0.92);
-  color: #fffaf4;
+  background: rgba(31, 57, 66, 0.92);
+  color: #fbf8f3;
   font-weight: 700;
-  box-shadow: 0 14px 28px rgba(47, 38, 33, 0.22);
+  box-shadow: 0 14px 28px rgba(31, 57, 66, 0.2);
 }
 
 .check-item {
