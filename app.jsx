@@ -1724,12 +1724,12 @@ function App() {
           <>
             <section className="panel panel--highlight stats">
               <article className="stat-card stat-card--compact">
-                <span>今日のセーブ金額</span>
+                <span>今日のちりつも金額</span>
                 <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
                 <small>累計 ¥{totalSavedMoney.toLocaleString("ja-JP")}</small>
               </article>
               <article className="stat-card stat-card--compact">
-                <span>今日のセーブカロリー</span>
+                <span>今日のちりつもカロリー</span>
                 <strong>{todaySavedCalories.toLocaleString("ja-JP")} kcal</strong>
                 <small>累計 {totalSavedCalories.toLocaleString("ja-JP")} kcal</small>
               </article>
@@ -1759,13 +1759,13 @@ function App() {
                 </label>
                 {saveRecordForm.entryType !== "calorie" && (
                   <label>
-                    <span>セーブ金額</span>
+                    <span>ちりつも金額</span>
                     <input type="number" min="0" value={saveRecordForm.money} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, money: event.target.value })} />
                   </label>
                 )}
                 {saveRecordForm.entryType !== "money" && (
                   <label>
-                    <span>セーブカロリー</span>
+                    <span>ちりつもカロリー</span>
                     <input type="number" min="0" value={saveRecordForm.calories} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, calories: event.target.value })} />
                   </label>
                 )}
