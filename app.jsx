@@ -62,6 +62,11 @@ function getLocalDateTimeString() {
   return getLocalNow().toISOString().slice(0, 16);
 }
 
+function getDatePart(dateString) {
+  if (!dateString) return getTodayDateString();
+  return dateString.slice(0, 10);
+}
+
 function parseLocalDate(dateString) {
   if (!dateString) return new Date();
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
@@ -221,6 +226,21 @@ function getFrequencyLabel(frequencyType, interval) {
   return frequencyType;
 }
 
+function normalizeRoutine(routine) {
+  if (!routine || typeof routine !== "object") return null;
+
+  const startAt = routine.startAt || routine.startDate || getLocalDateTimeString();
+  const startDate = getDatePart(startAt);
+
+  return {
+    ...routine,
+    startAt,
+    startDate,
+    nextDueDate: routine.nextDueDate || calculateNextDueDate(startAt, routine.frequencyType, routine.interval),
+    completedForDate: routine.completedForDate || null,
+  };
+}
+
 function getNotificationSupport() {
   if (typeof window === "undefined") {
     return { available: false, reason: "通知はこの端末では利用できません" };
@@ -294,8 +314,9 @@ function createInitialState() {
         category: "スキンケア",
         frequencyType: "毎日",
         interval: 1,
+        startAt: getLocalDateTimeString(),
         startDate: getTodayDateString(),
-        nextDueDate: getTodayDateString(),
+        nextDueDate: calculateNextDueDate(getLocalDateTimeString(), "毎日", 1),
         lastCompletedAt: null,
         completedForDate: null,
         createdAt: new Date().toISOString(),
@@ -306,8 +327,9 @@ function createInitialState() {
         category: "コンタクト",
         frequencyType: "週間ごと",
         interval: 2,
+        startAt: getLocalDateTimeString(),
         startDate: getTodayDateString(),
-        nextDueDate: getTodayDateString(),
+        nextDueDate: calculateNextDueDate(getLocalDateTimeString(), "週間ごと", 2),
         lastCompletedAt: null,
         completedForDate: null,
         createdAt: new Date().toISOString(),
@@ -333,7 +355,7 @@ function loadState() {
         records: parsed?.meal?.records && typeof parsed.meal.records === "object" ? parsed.meal.records : {},
       },
       routines: Array.isArray(parsed?.routines)
-        ? parsed.routines.map((routine) => ({ completedForDate: null, ...routine }))
+        ? parsed.routines.map(normalizeRoutine).filter(Boolean)
         : initial.routines,
       save: {
         records: Array.isArray(parsed?.save?.records)
@@ -508,7 +530,7 @@ function App() {
     category: "スキンケア",
     frequencyType: "毎日",
     interval: 1,
-    startDate: getTodayDateString(),
+    startAt: getLocalDateTimeString(),
   });
   const [saveRecordForm, setSaveRecordForm] = useState({
     itemName: "",
@@ -858,8 +880,9 @@ function App() {
       category: routineForm.category,
       frequencyType: routineForm.frequencyType,
       interval: routineForm.frequencyType === "毎日" ? 1 : Number(routineForm.interval || 1),
-      startDate: routineForm.startDate,
-      nextDueDate: routineForm.startDate,
+      startAt: routineForm.startAt,
+      startDate: getDatePart(routineForm.startAt),
+      nextDueDate: calculateNextDueDate(routineForm.startAt, routineForm.frequencyType, routineForm.interval),
       lastCompletedAt: null,
       completedForDate: null,
       createdAt: new Date().toISOString(),
@@ -871,7 +894,7 @@ function App() {
       category: routineForm.category,
       frequencyType: routineForm.frequencyType,
       interval: routineForm.interval,
-      startDate: getTodayDateString(),
+      startAt: getLocalDateTimeString(),
     });
     showToast("追加しました");
   }
@@ -903,7 +926,7 @@ function App() {
           ...routine,
           lastCompletedAt: null,
           completedForDate: null,
-          nextDueDate: routine.previousNextDueDate || routine.startDate,
+          nextDueDate: routine.previousNextDueDate || getDatePart(routine.startAt || routine.startDate),
           previousNextDueDate: null,
         };
       }),
@@ -1611,8 +1634,12 @@ function App() {
                   <input type="number" min="1" value={routineForm.interval} disabled={routineForm.frequencyType === "毎日"} onChange={(event) => setRoutineForm({ ...routineForm, interval: Number(event.target.value) })} />
                 </label>
                 <label>
-                  <span>開始日</span>
-                  <input type="date" value={routineForm.startDate} onChange={(event) => setRoutineForm({ ...routineForm, startDate: event.target.value })} />
+                  <span>開始日時</span>
+                  <input
+                    type="datetime-local"
+                    value={routineForm.startAt}
+                    onChange={(event) => setRoutineForm({ ...routineForm, startAt: event.target.value })}
+                  />
                 </label>
                 <button className="primary-button form-grid__full" type="submit">ルーティーンを追加</button>
               </form>
@@ -1633,6 +1660,7 @@ function App() {
                         <p className="record-card__meta">
                           {routine.category} / {getFrequencyLabel(routine.frequencyType, routine.interval)}
                         </p>
+                        <p className="record-card__text">開始日時: {formatDateTime(routine.startAt || routine.startDate)}</p>
                         <p className="record-card__text">次回予定日: {formatDate(routine.nextDueDate)}</p>
                       </div>
                       <div className="action-stack">
