@@ -62,6 +62,11 @@ function getLocalDateTimeString() {
   return getLocalNow().toISOString().slice(0, 16);
 }
 
+function getDatePart(dateString) {
+  if (!dateString) return getTodayDateString();
+  return dateString.slice(0, 10);
+}
+
 function parseLocalDate(dateString) {
   if (!dateString) return new Date();
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
@@ -221,6 +226,30 @@ function getFrequencyLabel(frequencyType, interval) {
   return frequencyType;
 }
 
+function normalizePositiveIntegerInput(value, fallback = "1") {
+  const normalized = String(value ?? "").replace(/[０-９]/g, (digit) =>
+    String.fromCharCode(digit.charCodeAt(0) - 0xfee0)
+  );
+  const digitsOnly = normalized.replace(/[^\d]/g, "");
+  if (!digitsOnly) return "";
+  return String(Math.max(Number(digitsOnly), Number(fallback)));
+}
+
+function normalizeRoutine(routine) {
+  if (!routine || typeof routine !== "object") return null;
+
+  const startAt = routine.startAt || routine.startDate || getLocalDateTimeString();
+  const startDate = getDatePart(startAt);
+
+  return {
+    ...routine,
+    startAt,
+    startDate,
+    nextDueDate: routine.nextDueDate || calculateNextDueDate(startAt, routine.frequencyType, routine.interval),
+    completedForDate: routine.completedForDate || null,
+  };
+}
+
 function getNotificationSupport() {
   if (typeof window === "undefined") {
     return { available: false, reason: "通知はこの端末では利用できません" };
@@ -294,8 +323,9 @@ function createInitialState() {
         category: "スキンケア",
         frequencyType: "毎日",
         interval: 1,
+        startAt: getLocalDateTimeString(),
         startDate: getTodayDateString(),
-        nextDueDate: getTodayDateString(),
+        nextDueDate: calculateNextDueDate(getLocalDateTimeString(), "毎日", 1),
         lastCompletedAt: null,
         completedForDate: null,
         createdAt: new Date().toISOString(),
@@ -306,8 +336,9 @@ function createInitialState() {
         category: "コンタクト",
         frequencyType: "週間ごと",
         interval: 2,
+        startAt: getLocalDateTimeString(),
         startDate: getTodayDateString(),
-        nextDueDate: getTodayDateString(),
+        nextDueDate: calculateNextDueDate(getLocalDateTimeString(), "週間ごと", 2),
         lastCompletedAt: null,
         completedForDate: null,
         createdAt: new Date().toISOString(),
@@ -333,7 +364,7 @@ function loadState() {
         records: parsed?.meal?.records && typeof parsed.meal.records === "object" ? parsed.meal.records : {},
       },
       routines: Array.isArray(parsed?.routines)
-        ? parsed.routines.map((routine) => ({ completedForDate: null, ...routine }))
+        ? parsed.routines.map(normalizeRoutine).filter(Boolean)
         : initial.routines,
       save: {
         records: Array.isArray(parsed?.save?.records)
@@ -507,8 +538,8 @@ function App() {
     name: "",
     category: "スキンケア",
     frequencyType: "毎日",
-    interval: 1,
-    startDate: getTodayDateString(),
+    interval: "1",
+    startAt: getLocalDateTimeString(),
   });
   const [saveRecordForm, setSaveRecordForm] = useState({
     itemName: "",
@@ -851,15 +882,18 @@ function App() {
   function handleAddRoutine(event) {
     event.preventDefault();
     if (!routineForm.name.trim()) return;
+    const normalizedInterval =
+      routineForm.frequencyType === "毎日" ? 1 : Number(normalizePositiveIntegerInput(routineForm.interval) || 1);
 
     const nextRoutine = {
       id: createId("routine"),
       name: routineForm.name.trim(),
       category: routineForm.category,
       frequencyType: routineForm.frequencyType,
-      interval: routineForm.frequencyType === "毎日" ? 1 : Number(routineForm.interval || 1),
-      startDate: routineForm.startDate,
-      nextDueDate: routineForm.startDate,
+      interval: normalizedInterval,
+      startAt: routineForm.startAt,
+      startDate: getDatePart(routineForm.startAt),
+      nextDueDate: calculateNextDueDate(routineForm.startAt, routineForm.frequencyType, normalizedInterval),
       lastCompletedAt: null,
       completedForDate: null,
       createdAt: new Date().toISOString(),
@@ -871,7 +905,7 @@ function App() {
       category: routineForm.category,
       frequencyType: routineForm.frequencyType,
       interval: routineForm.interval,
-      startDate: getTodayDateString(),
+      startAt: getLocalDateTimeString(),
     });
     showToast("追加しました");
   }
@@ -903,7 +937,7 @@ function App() {
           ...routine,
           lastCompletedAt: null,
           completedForDate: null,
-          nextDueDate: routine.previousNextDueDate || routine.startDate,
+          nextDueDate: routine.previousNextDueDate || getDatePart(routine.startAt || routine.startDate),
           previousNextDueDate: null,
         };
       }),
@@ -1027,7 +1061,7 @@ function App() {
 
   function clearSaveRecords() {
     if (saveRecords.length === 0) return;
-    if (!window.confirm("我慢ログの履歴をすべて削除しますか？")) return;
+    if (!window.confirm("ちりつもご褒美の履歴をすべて削除しますか？")) return;
     setState((current) => ({
       ...current,
       save: {
@@ -1075,7 +1109,7 @@ function App() {
           ["home", "ホーム"],
           ["meals", "食事記録"],
           ["routines", "リマインド"],
-          ["save", "我慢ログ"],
+          ["save", "ちりつもご褒美"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -1116,12 +1150,12 @@ function App() {
                 </small>
               </article>
               <article className="stat-card stat-card--dual">
-                <span>今日の我慢ログ</span>
+                <span>今日のちりつもご褒美</span>
                 <div className="dual-metric">
                   <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
                   <strong>{todaySavedCalories.toLocaleString("ja-JP")} kcal</strong>
                 </div>
-                <small>お金とカロリーの両方を確認できます</small>
+                <small>小さな選択のご褒美を、お金とカロリーの両方で確認できます</small>
               </article>
             </section>
 
@@ -1177,7 +1211,7 @@ function App() {
 
             <section className="panel">
               <div className="section-heading">
-                <h2>我慢ログの目標進捗</h2>
+                <h2>ちりつもご褒美の目標進捗</h2>
               </div>
               <div className="goal-stack">
                 <article className="goal-card">
@@ -1600,7 +1634,16 @@ function App() {
                 </label>
                 <label>
                   <span>頻度</span>
-                  <select value={routineForm.frequencyType} onChange={(event) => setRoutineForm({ ...routineForm, frequencyType: event.target.value })}>
+                  <select
+                    value={routineForm.frequencyType}
+                    onChange={(event) =>
+                      setRoutineForm({
+                        ...routineForm,
+                        frequencyType: event.target.value,
+                        interval: event.target.value === "毎日" ? "1" : routineForm.interval || "1",
+                      })
+                    }
+                  >
                     {FREQUENCY_TYPES.map((type) => (
                       <option key={type} value={type}>{type === "毎日" ? "毎日" : `○${type}`}</option>
                     ))}
@@ -1608,11 +1651,31 @@ function App() {
                 </label>
                 <label>
                   <span>間隔</span>
-                  <input type="number" min="1" value={routineForm.interval} disabled={routineForm.frequencyType === "毎日"} onChange={(event) => setRoutineForm({ ...routineForm, interval: Number(event.target.value) })} />
+                  <input
+                    type="text"
+                    value={routineForm.interval}
+                    disabled={routineForm.frequencyType === "毎日"}
+                    onChange={(event) =>
+                      setRoutineForm({
+                        ...routineForm,
+                        interval: event.target.value,
+                      })
+                    }
+                    onBlur={() =>
+                      setRoutineForm((current) => ({
+                        ...current,
+                        interval: normalizePositiveIntegerInput(current.interval) || "1",
+                      }))
+                    }
+                  />
                 </label>
                 <label>
-                  <span>開始日</span>
-                  <input type="date" value={routineForm.startDate} onChange={(event) => setRoutineForm({ ...routineForm, startDate: event.target.value })} />
+                  <span>開始日時</span>
+                  <input
+                    type="datetime-local"
+                    value={routineForm.startAt}
+                    onChange={(event) => setRoutineForm({ ...routineForm, startAt: event.target.value })}
+                  />
                 </label>
                 <button className="primary-button form-grid__full" type="submit">ルーティーンを追加</button>
               </form>
@@ -1633,6 +1696,7 @@ function App() {
                         <p className="record-card__meta">
                           {routine.category} / {getFrequencyLabel(routine.frequencyType, routine.interval)}
                         </p>
+                        <p className="record-card__text">開始日時: {formatDateTime(routine.startAt || routine.startDate)}</p>
                         <p className="record-card__text">次回予定日: {formatDate(routine.nextDueDate)}</p>
                       </div>
                       <div className="action-stack">
@@ -1660,29 +1724,29 @@ function App() {
           <>
             <section className="panel panel--highlight stats">
               <article className="stat-card stat-card--compact">
-                <span>今日のセーブ金額</span>
+                <span>今日のちりつも金額</span>
                 <strong>¥{todaySavedMoney.toLocaleString("ja-JP")}</strong>
                 <small>累計 ¥{totalSavedMoney.toLocaleString("ja-JP")}</small>
               </article>
               <article className="stat-card stat-card--compact">
-                <span>今日のセーブカロリー</span>
+                <span>今日のちりつもカロリー</span>
                 <strong>{todaySavedCalories.toLocaleString("ja-JP")} kcal</strong>
                 <small>累計 {totalSavedCalories.toLocaleString("ja-JP")} kcal</small>
               </article>
               <article className="stat-card stat-card--compact">
                 <span>記録件数</span>
                 <strong>{saveRecords.length} 件</strong>
-                <small>毎日の我慢を見える化</small>
+                <small>小さな選択がご褒美につながる流れを見える化</small>
               </article>
             </section>
 
             <section className="panel">
               <div className="section-heading">
-                <h2>我慢ログを記録する</h2>
+                <h2>ちりつもご褒美を記録する</h2>
               </div>
               <form className="form-grid" onSubmit={addSaveRecord}>
                 <label className="form-grid__full">
-                  <span>我慢したもの</span>
+                  <span>選ばなかったもの</span>
                   <input type="text" value={saveRecordForm.itemName} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, itemName: event.target.value })} placeholder="例: コンビニスイーツ" />
                 </label>
                 <label className="form-grid__full">
@@ -1695,13 +1759,13 @@ function App() {
                 </label>
                 {saveRecordForm.entryType !== "calorie" && (
                   <label>
-                    <span>セーブ金額</span>
+                    <span>ちりつも金額</span>
                     <input type="number" min="0" value={saveRecordForm.money} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, money: event.target.value })} />
                   </label>
                 )}
                 {saveRecordForm.entryType !== "money" && (
                   <label>
-                    <span>セーブカロリー</span>
+                    <span>ちりつもカロリー</span>
                     <input type="number" min="0" value={saveRecordForm.calories} onChange={(event) => setSaveRecordForm({ ...saveRecordForm, calories: event.target.value })} />
                   </label>
                 )}
